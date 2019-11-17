@@ -1,13 +1,18 @@
 use fft::Fft32;
 use num_complex::Complex;
-use num_traits::Float;
+use num_traits::{Float, FromPrimitive};
 use serde::Deserialize;
 
-fn near(actual: &[Complex<f32>], expected: &[Complex<f32>]) {
+fn near<T: Float + FromPrimitive + std::fmt::Display>(
+    actual: &[Complex<T>],
+    expected: &[Complex<T>],
+) {
     assert_eq!(actual.len(), expected.len());
+    let tolerance =
+        T::epsilon() * T::from_usize(actual.len()).unwrap().log2() * T::from_usize(10).unwrap();
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert!(
-            (actual - expected).norm() < 1e-5,
+            (actual - expected).norm() / expected.norm() < tolerance,
             format!("{} != {}", actual, expected)
         );
     }
@@ -23,9 +28,6 @@ macro_rules! generate_vector_test {
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
             let mut fft = Fft32::new(data.x.len());
             fft.fft_in_place(&mut data.x);
-            println!("{:#?}", fft);
-            println!("{:?}", data.x);
-            println!("{:?}", data.y);
             near(&data.x, &data.y);
         }
     };
@@ -38,9 +40,6 @@ macro_rules! generate_vector_test {
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
             let mut fft = Fft32::new(data.x.len());
             fft.ifft_in_place(&mut data.y);
-            println!("{:#?}", fft);
-            println!("{:?}", data.x);
-            println!("{:?}", data.y);
             near(&data.y, &data.x);
         }
     }

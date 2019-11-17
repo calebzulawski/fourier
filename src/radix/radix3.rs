@@ -44,19 +44,15 @@ pub fn radix3<T: FftFloat>(
 
     let m = size / 3;
     for i in 0..m {
-        let wi = twiddles[i];
+        let wi1 = twiddles[i];
+        let wi2 = twiddles[i + m];
         for j in 0..*stride {
             let a = x[j + stride * i];
             let b = x[j + stride * (i + m)];
             let c = x[j + stride * (i + 2 * m)];
-            let a2 = a + b * twiddle.re;
-            let b2 = c * Complex {
-                re: T::zero(),
-                ..twiddle.clone()
-            };
-            y[j + stride * 3 * i] = a + b;
-            y[j + stride * (3 * i + 1)] = (a2 + b2) * wi;
-            y[j + stride * (3 * i + 2)] = (a2 - b2) * wi;
+            y[j + stride * 3 * i] = a + b + c;
+            y[j + stride * (3 * i + 1)] = (a + b * twiddle + c * twiddle.conj()) * wi1;
+            y[j + stride * (3 * i + 2)] = (a + b * twiddle.conj() + c * twiddle) * wi2;
         }
     }
 }

@@ -2,6 +2,7 @@ use crate::radix;
 //use multiversion::target_clones;
 use num_complex::Complex;
 
+#[derive(Debug)]
 enum Operation<T> {
     Radix2(radix::Radix2Config<T>),
     Radix3(radix::Radix3Config<T>),
@@ -75,6 +76,7 @@ fn inverse_f32_in_place(
     }
 }
 
+#[derive(Debug)]
 pub struct Fft32 {
     size: usize,
     forward_ops: Vec<Operation<f32>>,
@@ -93,7 +95,7 @@ impl Fft32 {
                 forward_ops.push(Operation::Radix2(radix::Radix2Config::forward(
                     subsize, stride,
                 )));
-                inverse_ops.push(Operation::Radix2(radix::Radix2Config::forward(
+                inverse_ops.push(Operation::Radix2(radix::Radix2Config::inverse(
                     subsize, stride,
                 )));
                 subsize /= 2;
@@ -102,7 +104,7 @@ impl Fft32 {
                 forward_ops.push(Operation::Radix3(radix::Radix3Config::forward(
                     subsize, stride,
                 )));
-                inverse_ops.push(Operation::Radix3(radix::Radix3Config::forward(
+                inverse_ops.push(Operation::Radix3(radix::Radix3Config::inverse(
                     subsize, stride,
                 )));
                 subsize /= 3;

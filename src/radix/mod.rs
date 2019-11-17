@@ -16,6 +16,7 @@ fn compute_twiddle<T: FftFloat>(index: usize, size: usize, forward: bool) -> Com
     }
 }
 
+#[derive(Debug)]
 struct BaseConfig<T> {
     twiddles: Vec<Complex<T>>,
     stride: usize,
@@ -28,7 +29,7 @@ impl<T: FftFloat> BaseConfig<T> {
         let m = size / radix;
         let mut twiddles = Vec::new();
         for i in 0..m {
-            twiddles.push(compute_twiddle(i, m, forward));
+            twiddles.push(compute_twiddle(i, size, forward));
         }
         Self {
             twiddles,

@@ -2,6 +2,7 @@ use super::BaseConfig;
 use crate::float::FftFloat;
 use num_complex::Complex;
 
+#[derive(Debug)]
 pub struct Radix2Config<T> {
     base: BaseConfig<T>,
 }

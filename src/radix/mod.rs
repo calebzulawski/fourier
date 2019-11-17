@@ -2,9 +2,11 @@ use crate::float::FftFloat;
 use num_complex::Complex;
 
 mod radix2;
+mod radix3;
 pub use radix2::*;
+pub use radix3::*;
 
-fn twiddle<T: FftFloat>(index: usize, size: usize, forward: bool) -> Complex<T> {
+fn compute_twiddle<T: FftFloat>(index: usize, size: usize, forward: bool) -> Complex<T> {
     let theta = T::from_usize(index * 2).unwrap() * T::PI() / T::from_usize(size).unwrap();
     let twiddle = Complex::new(theta.cos(), -theta.sin());
     if forward {
@@ -26,7 +28,7 @@ impl<T: FftFloat> BaseConfig<T> {
         let m = size / radix;
         let mut twiddles = Vec::new();
         for i in 0..m {
-            twiddles.push(twiddle(i, m, forward));
+            twiddles.push(compute_twiddle(i, m, forward));
         }
         Self {
             twiddles,

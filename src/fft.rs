@@ -4,6 +4,7 @@ use num_complex::Complex;
 
 enum Operation<T> {
     Radix2(radix::Radix2Config<T>),
+    Radix3(radix::Radix3Config<T>),
 }
 
 //#[target_clones("x86_64+avx")]
@@ -11,8 +12,11 @@ enum Operation<T> {
 fn apply_f32(operation: &Operation<f32>, input: &[Complex<f32>], output: &mut [Complex<f32>]) {
     //#[static_dispatch]
     use radix::radix2_f32;
+    //#[static_dispatch]
+    use radix::radix3_f32;
     match operation {
         Operation::Radix2(config) => radix2_f32(input, output, config),
+        Operation::Radix3(config) => radix3_f32(input, output, config),
     }
 }
 
@@ -73,43 +77,60 @@ fn inverse_f32_in_place(
 
 pub struct Fft32 {
     size: usize,
-    operations: Vec<Operation<f32>>,
+    forward_ops: Vec<Operation<f32>>,
+    inverse_ops: Vec<Operation<f32>>,
     work: Box<[Complex<f32>]>,
 }
 
 impl Fft32 {
     pub fn new(size: usize) -> Self {
-        let mut operations = Vec::new();
+        let mut forward_ops = Vec::new();
+        let mut inverse_ops = Vec::new();
         let mut subsize = size;
         let mut stride = 1usize;
         while subsize != 1 {
             if subsize % 2 == 0 {
-                let config = radix::Radix2Config::forward(subsize, stride);
-                operations.push(Operation::Radix2(config));
+                forward_ops.push(Operation::Radix2(radix::Radix2Config::forward(
+                    subsize, stride,
+                )));
+                inverse_ops.push(Operation::Radix2(radix::Radix2Config::forward(
+                    subsize, stride,
+                )));
                 subsize /= 2;
                 stride *= 2;
+            } else if subsize % 3 == 0 {
+                forward_ops.push(Operation::Radix3(radix::Radix3Config::forward(
+                    subsize, stride,
+                )));
+                inverse_ops.push(Operation::Radix3(radix::Radix3Config::forward(
+                    subsize, stride,
+                )));
+                subsize /= 3;
+                stride *= 3;
             } else {
                 unimplemented!("only radix-2 supported");
             }
         }
         Self {
             size,
-            operations,
+            forward_ops,
+            inverse_ops,
             work: vec![Complex::default(); size].into_boxed_slice(),
         }
     }
 
     pub fn fft_in_place(&mut self, input: &mut [Complex<f32>]) {
         assert_eq!(input.len(), self.size, "input must match configured size");
-        forward_f32_in_place(&self.operations, input, &mut self.work);
+        forward_f32_in_place(&self.forward_ops, input, &mut self.work);
     }
 
     pub fn ifft_in_place(&mut self, input: &mut [Complex<f32>]) {
         assert_eq!(input.len(), self.size, "input must match configured size");
-        inverse_f32_in_place(&self.operations, input, &mut self.work);
+        inverse_f32_in_place(&self.inverse_ops, input, &mut self.work);
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -135,4 +156,28 @@ mod test {
             assert!(x.norm() < 1e-10);
         }
     }
+
+    #[test]
+    fn unit_216_forward_in_place_f32() {
+        let mut input = vec![Complex::new(0f32, 0f32); 216];
+        input[0] = Complex::new(1f32, 0f32);
+        let mut fft = Fft32::new(216);
+        fft.fft_in_place(&mut input);
+        for x in input {
+            assert!((x - 1.0).norm() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn unit_216_inverse_in_place_f32() {
+        let mut input = vec![Complex::new(1f32, 0f32); 216];
+        let mut fft = Fft32::new(216);
+        fft.ifft_in_place(&mut input);
+        println!("{:#?}", input);
+        assert!((input[0] - 1.0).norm() < 1e-10);
+        for x in input.iter().skip(1) {
+            assert!(x.norm() < 1e-10);
+        }
+    }
 }
+*/

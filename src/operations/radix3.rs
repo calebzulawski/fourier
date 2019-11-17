@@ -2,13 +2,12 @@ use super::BaseConfig;
 use crate::float::FftFloat;
 use num_complex::Complex;
 
-#[derive(Debug)]
-pub struct Radix3Config<T> {
+pub struct Radix3<T> {
     base: BaseConfig<T>,
     twiddle: Complex<T>,
 }
 
-impl<T: FftFloat> Radix3Config<T> {
+impl<T: FftFloat> Radix3<T> {
     fn new(size: usize, stride: usize, forward: bool) -> Self {
         Self {
             base: BaseConfig::new(size, stride, 3, forward),
@@ -29,14 +28,14 @@ impl<T: FftFloat> Radix3Config<T> {
 pub fn radix3<T: FftFloat>(
     x: &[Complex<T>],
     y: &mut [Complex<T>],
-    Radix3Config {
+    Radix3 {
         base: BaseConfig {
             twiddles,
             stride,
             size,
         },
         twiddle,
-    }: &Radix3Config<T>,
+    }: &Radix3<T>,
 ) {
     assert_eq!(x.len(), size * stride);
     assert_eq!(y.len(), size * stride);
@@ -57,6 +56,6 @@ pub fn radix3<T: FftFloat>(
     }
 }
 
-pub fn radix3_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix3Config<f32>) {
+pub fn radix3_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix3<f32>) {
     radix3(x, y, config);
 }

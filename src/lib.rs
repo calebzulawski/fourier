@@ -1,5 +1,5 @@
 mod fft;
 mod float;
-mod radix;
+mod operations;
 
 pub use crate::fft::Fft32;

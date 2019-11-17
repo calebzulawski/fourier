@@ -3,12 +3,13 @@ use crate::radix;
 use num_complex::Complex;
 
 enum Operation<T> {
-    Radix2(radix::RadixConfig<T>),
+    Radix2(radix::Radix2Config<T>),
 }
 
 //#[target_clones("x86_64+avx")]
 #[inline]
 fn apply_f32(operation: &Operation<f32>, input: &[Complex<f32>], output: &mut [Complex<f32>]) {
+    //#[static_dispatch]
     use radix::radix2_f32;
     match operation {
         Operation::Radix2(config) => radix2_f32(input, output, config),
@@ -83,7 +84,7 @@ impl Fft32 {
         let mut stride = 1usize;
         while subsize != 1 {
             if subsize % 2 == 0 {
-                let config = radix::RadixConfig::forward(subsize, stride, 2);
+                let config = radix::Radix2Config::forward(subsize, stride);
                 operations.push(Operation::Radix2(config));
                 subsize /= 2;
                 stride *= 2;

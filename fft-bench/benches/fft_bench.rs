@@ -29,6 +29,26 @@ fn pow2_f32(c: &mut Criterion) {
             let mut output = vec![Complex::default(); input.len()];
             b.iter(|| rustfft.process(input.as_mut(), output.as_mut()))
         });
+
+        use mkl_fft::plan::C2CPlan;
+        let mut mkl_fft = mkl_fft::plan::C2CPlan32::aligned(
+            &[size],
+            mkl_fft::types::Sign::Forward,
+            mkl_fft::types::Flag::Measure,
+        )
+        .unwrap();
+        group.bench_with_input(BenchmarkId::new("Intel MKL", size), &input, |b, i| {
+            let mut input = mkl_fft::array::AlignedVec::new(size);
+            for (i, o) in i.iter().zip(input.as_slice_mut().iter_mut()) {
+                *o = mkl_fft::types::c32::new(i.re, i.im);
+            }
+            let mut output = mkl_fft::array::AlignedVec::new(size);
+            b.iter(|| {
+                mkl_fft
+                    .c2c(input.as_slice_mut(), output.as_slice_mut())
+                    .unwrap()
+            })
+        });
     }
     group.finish();
 }

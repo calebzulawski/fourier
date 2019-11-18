@@ -9,6 +9,7 @@ criterion = "0.3"
 num = "0.2"
 rand = "0.7"
 rustfft = "3"
+mkl_fft = { package = "fftw", version = "0.6", features = ["intel-mkl"], default-features = false }
 fft = { path = "../fft" }
 
 [[bench]]

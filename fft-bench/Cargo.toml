@@ -1,0 +1,16 @@
+[package]
+name = "fft-bench"
+version = "0.1.0"
+authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+edition = "2018"
+
+[dev-dependencies]
+criterion = "0.3"
+num = "0.2"
+rand = "0.7"
+rustfft = "3"
+fft = { path = "../fft" }
+
+[[bench]]
+name = "fft_bench"
+harness = false

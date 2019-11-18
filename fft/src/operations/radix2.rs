@@ -36,14 +36,23 @@ pub fn radix2<T: FftFloat>(
     assert_eq!(y.len(), size * stride);
     assert!(*stride != 0);
 
-    let m = size / 2;
-    for i in 0..m {
-        let wi = twiddles[i];
-        for j in 0..*stride {
-            let a = x[j + stride * i];
-            let b = x[j + stride * (i + m)];
-            y[j + stride * 2 * i] = a + b;
-            y[j + stride * (2 * i + 1)] = (a - b) * wi;
+    if *size == 2usize {
+        for i in 0..*stride {
+            let a = x[i];
+            let b = x[i + stride];
+            y[i] = a + b;
+            y[i + stride] = a - b;
+        }
+    } else {
+        let m = size / 2;
+        for i in 0..m {
+            let wi = twiddles[i];
+            for j in 0..*stride {
+                let a = x[j + stride * i];
+                let b = x[j + stride * (i + m)];
+                y[j + stride * 2 * i] = a + b;
+                y[j + stride * (2 * i + 1)] = (a - b) * wi;
+            }
         }
     }
 }

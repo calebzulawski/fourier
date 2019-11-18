@@ -3,8 +3,10 @@ use num_complex::Complex;
 
 mod radix2;
 mod radix3;
+mod radix4;
 use radix2::*;
 use radix3::*;
+use radix4::*;
 
 fn compute_twiddle<T: FftFloat>(index: usize, size: usize, forward: bool) -> Complex<T> {
     let theta = (index * 2) as f64 * std::f64::consts::PI / size as f64;
@@ -90,6 +92,7 @@ macro_rules! operations {
 }
 
 operations! {
+    [radix 4 => Radix4, radix4_f32],
     [radix 3 => Radix3, radix3_f32],
     [radix 2 => Radix2, radix2_f32]
 }

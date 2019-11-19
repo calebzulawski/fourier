@@ -50,7 +50,7 @@ pub fn radix4<T: FftFloat>(
         }
     }
 
-    if *size == 4usize {
+    if *size == 4 {
         for i in 0..*stride {
             let x0 = x[i];
             let x1 = x[i + stride];
@@ -151,7 +151,7 @@ unsafe fn radix4_f32_avx(
         unroll! {
             for k in 0..3 {
                 let twiddle = twiddles[i + k * m];
-                wi[k] = _mm256_unpacklo_ps(_mm256_set1_ps(twiddle.re), _mm256_set1_ps(twiddle.im));
+                wi[k] = _mm256_blend_ps(_mm256_set1_ps(twiddle.re), _mm256_set1_ps(twiddle.im), 0xaa);
             }
         }
 

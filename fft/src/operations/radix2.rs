@@ -57,6 +57,98 @@ pub fn radix2<T: FftFloat>(
     }
 }
 
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix2_f32_avx(
+    x: &[Complex<f32>],
+    y: &mut [Complex<f32>],
+    Radix2 {
+        base: BaseConfig {
+            twiddles,
+            stride,
+            size,
+        },
+    }: &Radix2<f32>,
+) {
+    assert_eq!(x.len(), size * stride);
+    assert_eq!(y.len(), size * stride);
+    assert!(*stride != 0);
+
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    #[inline(always)]
+    unsafe fn mul(a: __m256, b: __m256) -> __m256 {
+        let a_re = _mm256_moveldup_ps(a);
+        let a_im = _mm256_movehdup_ps(a);
+        let b_sh = _mm256_permute_ps(b, 0xb1);
+        _mm256_addsub_ps(_mm256_mul_ps(a_re, b), _mm256_mul_ps(a_im, b_sh))
+    }
+
+    #[inline(always)]
+    unsafe fn bfly(x: [__m256; 2]) -> [__m256; 2] {
+        [_mm256_add_ps(x[0], x[1]), _mm256_sub_ps(x[0], x[1])]
+    }
+
+    let m = size / 2;
+    let full_count = (*stride / 4) * 4; // 4 values per register
+    let partial_count = *stride - full_count;
+    for i in 0..m {
+        // Load and broadcast twiddle factor
+        let twiddle = twiddles[i];
+        let wi = _mm256_blend_ps(_mm256_set1_ps(twiddle.re), _mm256_set1_ps(twiddle.im), 0xaa);
+
+        // Loop over full vectors
+        for j in (0..full_count).step_by(4) {
+            // Load full vectors
+            let load = x.as_ptr().add(j + stride * i);
+            let mut scratch = [
+                _mm256_loadu_ps(load as *const f32),
+                _mm256_loadu_ps(load.add(stride * m) as *const f32),
+            ];
+
+            // Butterfly with optional twiddles
+            scratch = bfly(scratch);
+            if *size != 2 {
+                scratch[1] = mul(scratch[1], wi);
+            }
+
+            // Store full vectors
+            let store = y.as_ptr().add(j + 4 * stride * i);
+            _mm256_storeu_ps(store as *mut f32, scratch[0]);
+            _mm256_storeu_ps(store.add(*stride) as *mut f32, scratch[1]);
+        }
+
+        // Apply the final partial vector
+        if partial_count > 0 {
+            // Load a partial vector
+            let has_2 = if partial_count >= 2 { -1 } else { 0 };
+            let has_3 = if partial_count >= 3 { -1 } else { 0 };
+            let mask = _mm256_set_epi32(0, 0, has_3, has_3, has_2, has_2, -1, -1);
+            let load = x.as_ptr().add(full_count + stride * i);
+            let mut scratch = [
+                _mm256_maskload_ps(load as *const f32, mask),
+                _mm256_maskload_ps(load.add(stride * m) as *const f32, mask),
+            ];
+
+            // Butterfly with optional twiddles
+            scratch = bfly(scratch);
+            if *size != 2 {
+                scratch[1] = mul(scratch[1], wi);
+            }
+
+            // Store a partial vector
+            let store = y.as_ptr().add(full_count + 4 * stride * i);
+            _mm256_maskstore_ps(store as *mut f32, mask, scratch[0]);
+            _mm256_maskstore_ps(store.add(*stride) as *mut f32, mask, scratch[1]);
+        }
+    }
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix2_f32_avx
+)]
 pub fn radix2_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix2<f32>) {
     radix2(x, y, config);
 }

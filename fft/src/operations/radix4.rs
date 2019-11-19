@@ -90,7 +90,6 @@ pub fn radix4<T: FftFloat>(
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
-#[inline]
 unsafe fn radix4_f32_avx(
     x: &[Complex<f32>],
     y: &mut [Complex<f32>],
@@ -112,7 +111,7 @@ unsafe fn radix4_f32_avx(
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::*;
 
-    #[inline]
+    #[multiversion::target("[x86|x86_64]+avx")]
     unsafe fn rotate(z: __m256, forward: bool) -> __m256 {
         if forward {
             _mm256_addsub_ps(_mm256_setzero_ps(), _mm256_permute_ps(z, 0xb1))
@@ -121,15 +120,15 @@ unsafe fn radix4_f32_avx(
         }
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn mul(a: __m256, b: __m256) -> __m256 {
-        let a_re = _mm256_unpacklo_ps(a, a);
-        let a_im = _mm256_unpackhi_ps(a, a);
-        let b_sh = _mm256_shuffle_ps(b, b, 5);
+        let a_re = _mm256_moveldup_ps(a);
+        let a_im = _mm256_movehdup_ps(a);
+        let b_sh = _mm256_permute_ps(b, 0xb1);
         _mm256_addsub_ps(_mm256_mul_ps(a_re, b), _mm256_mul_ps(a_im, b_sh))
     }
 
-    #[inline]
+    #[inline(always)]
     unsafe fn bfly(x: [__m256; 4], forward: bool) -> [__m256; 4] {
         let i0 = _mm256_add_ps(x[0], x[2]);
         let i1 = _mm256_sub_ps(x[0], x[2]);
@@ -143,8 +142,8 @@ unsafe fn radix4_f32_avx(
     }
 
     let m = size / 4;
-    let full_count = *stride / 4; // 4 values per register
-    let partial_count = *stride - full_count * 4;
+    let full_count = (*stride / 4) * 4; // 4 values per register
+    let partial_count = *stride - full_count;
     for i in 0..m {
         // Load and broadcast twiddle factors
         let mut wi = [_mm256_setzero_ps(); 3];
@@ -156,7 +155,7 @@ unsafe fn radix4_f32_avx(
         }
 
         // Loop over full vectors
-        for j in 0..full_count {
+        for j in (0..full_count).step_by(4) {
             // Load full vectors
             let mut scratch = [_mm256_setzero_ps(); 4];
             let load = x.as_ptr().add(j + stride * i);
@@ -220,6 +219,9 @@ unsafe fn radix4_f32_avx(
     }
 }
 
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix4_f32_avx
+)]
 pub fn radix4_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix4<f32>) {
-    unsafe { radix4_f32_avx(x, y, config) };
+    radix4(x, y, config);
 }

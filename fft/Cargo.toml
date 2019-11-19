@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 num-traits = "0.2"
 num-complex = "0.2"
-multiversion = "0.2"
+multiversion = { version = "0.2", path = "../../multiversion" }
 crunchy = "0.2"
 
 [dev-dependencies]

@@ -28,6 +28,7 @@ macro_rules! generate_vector_test {
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
             let mut fft = Fft32::new(data.x.len());
             fft.fft_in_place(&mut data.x);
+            println!("{:?}\n{:?}", data.x, data.y);
             near(&data.x, &data.y);
         }
     };

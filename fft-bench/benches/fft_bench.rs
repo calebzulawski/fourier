@@ -5,7 +5,7 @@ use rand::Rng;
 
 fn pow2_f32(c: &mut Criterion) {
     let mut group = c.benchmark_group("FFT, f32, powers of 2");
-    for size in (1..10).map(|x| 2usize.pow(x)) {
+    for size in (8..12).map(|x| 2usize.pow(x)) {
         let input = rand::thread_rng()
             .sample_iter(&Standard)
             .zip(rand::thread_rng().sample_iter(&Standard))

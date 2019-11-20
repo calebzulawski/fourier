@@ -44,6 +44,45 @@ pub fn radix3<T: FftFloat>(
     crate::implement_generic! {3, x, y, config, bfly}
 }
 
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix3_f32_avx(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix3<f32>) {
+    use crate::avx;
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    let twiddle = _mm256_blend_ps(
+        _mm256_set1_ps(config.twiddle.re),
+        _mm256_set1_ps(config.twiddle.im),
+        0xaa,
+    );
+    let twiddle_conj = _mm256_blend_ps(
+        _mm256_set1_ps(config.twiddle.re),
+        _mm256_set1_ps(-config.twiddle.im),
+        0xaa,
+    );
+
+    let bfly = |x: [__m256; 3], _forward: bool| -> [__m256; 3] {
+        [
+            _mm256_add_ps(x[0], _mm256_add_ps(x[1], x[2])),
+            _mm256_add_ps(
+                x[0],
+                _mm256_add_ps(avx::mul(x[1], twiddle), avx::mul(x[2], twiddle_conj)),
+            ),
+            _mm256_add_ps(
+                x[0],
+                _mm256_add_ps(avx::mul(x[1], twiddle_conj), avx::mul(x[2], twiddle)),
+            ),
+        ]
+    };
+
+    crate::implement_avx_f32! {3, x, y, &config.base, bfly}
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix3_f32_avx
+)]
 pub fn radix3_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix3<f32>) {
     radix3(x, y, config);
 }

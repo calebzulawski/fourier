@@ -1,6 +1,9 @@
 use crate::float::FftFloat;
 use num_complex::Complex;
 
+mod avx;
+mod generic;
+
 mod radix2;
 mod radix3;
 mod radix4;
@@ -25,6 +28,7 @@ struct BaseConfig<T> {
     twiddles: Vec<Complex<T>>,
     stride: usize,
     size: usize,
+    forward: bool,
 }
 
 impl<T: FftFloat> BaseConfig<T> {
@@ -41,6 +45,7 @@ impl<T: FftFloat> BaseConfig<T> {
             twiddles,
             stride,
             size,
+            forward,
         }
     }
 

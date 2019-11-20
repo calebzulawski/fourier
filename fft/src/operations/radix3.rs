@@ -29,31 +29,19 @@ pub fn radix3<T: FftFloat>(
     x: &[Complex<T>],
     y: &mut [Complex<T>],
     Radix3 {
-        base: BaseConfig {
-            twiddles,
-            stride,
-            size,
-        },
+        base: config,
         twiddle,
     }: &Radix3<T>,
 ) {
-    assert_eq!(x.len(), size * stride);
-    assert_eq!(y.len(), size * stride);
-    assert!(*stride != 0);
+    let bfly = |x: [Complex<T>; 3], _forward: bool| -> [Complex<T>; 3] {
+        [
+            x[0] + x[1] + x[2],
+            x[0] + x[1] * twiddle + x[2] * twiddle.conj(),
+            x[0] + x[1] * twiddle.conj() + x[2] * twiddle,
+        ]
+    };
 
-    let m = size / 3;
-    for i in 0..m {
-        let wi1 = twiddles[i];
-        let wi2 = twiddles[i + m];
-        for j in 0..*stride {
-            let a = x[j + stride * i];
-            let b = x[j + stride * (i + m)];
-            let c = x[j + stride * (i + 2 * m)];
-            y[j + stride * 3 * i] = a + b + c;
-            y[j + stride * (3 * i + 1)] = (a + b * twiddle + c * twiddle.conj()) * wi1;
-            y[j + stride * (3 * i + 2)] = (a + b * twiddle.conj() + c * twiddle) * wi2;
-        }
-    }
+    crate::implement_generic! {3, x, y, config, bfly}
 }
 
 pub fn radix3_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix3<f32>) {

@@ -1,4 +1,6 @@
 mod avx;
+mod generic;
+
 mod fft;
 mod float;
 mod operations;

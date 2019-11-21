@@ -5,6 +5,16 @@ use std::arch::x86_64::*;
 
 #[multiversion::target("[x86|x86_64]+avx")]
 #[inline]
+pub unsafe fn rotate(z: __m256, forward: bool) -> __m256 {
+    if forward {
+        _mm256_addsub_ps(_mm256_setzero_ps(), _mm256_permute_ps(z, 0xb1))
+    } else {
+        _mm256_permute_ps(_mm256_addsub_ps(_mm256_setzero_ps(), z), 0xb1)
+    }
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+#[inline]
 pub unsafe fn mul(a: __m256, b: __m256) -> __m256 {
     let a_re = _mm256_moveldup_ps(a);
     let a_im = _mm256_movehdup_ps(a);

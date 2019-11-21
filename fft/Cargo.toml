@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 num-traits = "0.2"
 num-complex = "0.2"
-multiversion = { version = "0.2", path = "../../multiversion" }
+multiversion = { git = "https://github.com/calebzulawski/multiversion" }
 
 [dev-dependencies]
 serde_json = "1"

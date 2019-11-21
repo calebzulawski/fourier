@@ -61,11 +61,21 @@ pub fn radix4<T: FftFloat>(x: &[Complex<T>], y: &mut [Complex<T>], config: &Radi
 
 #[multiversion::target("[x86|x86_64]+avx")]
 unsafe fn radix4_f32_avx(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix4<f32>) {
+    #[static_dispatch]
+    use crate::avx::mul;
+    crate::implement_avx_f32! {4, x, y, &config.base, butterfly_avx}
+}
+
+#[multiversion::target("[x86|x86_64]+avx+fma")]
+unsafe fn radix4_f32_fma(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix4<f32>) {
+    #[static_dispatch]
+    use crate::avx::mul;
     crate::implement_avx_f32! {4, x, y, &config.base, butterfly_avx}
 }
 
 #[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix4_f32_avx
+    "[x86|x86_64]+avx" => radix4_f32_avx,
+    "[x86|x86_64]+avx+fma" => radix4_f32_fma
 )]
 pub fn radix4_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix4<f32>) {
     radix4(x, y, config);

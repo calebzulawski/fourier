@@ -7,9 +7,11 @@ mod generic;
 mod radix2;
 mod radix3;
 mod radix4;
+mod radix8;
 use radix2::*;
 use radix3::*;
 use radix4::*;
+use radix8::*;
 
 fn compute_twiddle<T: FftFloat>(index: usize, size: usize, forward: bool) -> Complex<T> {
     let theta = (index * 2) as f64 * std::f64::consts::PI / size as f64;
@@ -86,9 +88,10 @@ macro_rules! operations {
             (forward_ops, inverse_ops)
         }
 
-        //#[target_clones("x86_64+avx")]
+        #[multiversion::target_clones("[x86|x86_64]+avx", "[x86|x86_64]+avx+fma")]
         #[inline]
         fn apply_f32(operation: &Operation<f32>, input: &[Complex<f32>], output: &mut [Complex<f32>]) {
+            $( #[static_dispatch] use $f32_op; )*
             match operation {
                 $(Operation::$operation(config) => $f32_op(input, output, config)),*
             }
@@ -97,20 +100,21 @@ macro_rules! operations {
 }
 
 operations! {
+    [radix 8 => Radix8, radix8_f32],
     [radix 4 => Radix4, radix4_f32],
     [radix 3 => Radix3, radix3_f32],
     [radix 2 => Radix2, radix2_f32]
 }
 
-//#[target_clones("x86_64+avx")]
+#[multiversion::target_clones("[x86|x86_64]+avx", "[x86|x86_64]+avx+fma")]
 #[inline]
 pub fn forward_f32_in_place(
     operations: &Vec<Operation<f32>>,
     input: &mut [Complex<f32>],
     work: &mut [Complex<f32>],
 ) {
-    //#[static_dispatch]
-    //use apply_f32;
+    #[static_dispatch]
+    use apply_f32;
     let mut data_in_work = false;
     for op in operations {
         let (from, to): (&mut _, &mut _) = if data_in_work {
@@ -126,15 +130,15 @@ pub fn forward_f32_in_place(
     }
 }
 
-//#[target_clones("x86_64+avx")]
+#[multiversion::target_clones("[x86|x86_64]+avx", "[x86|x86_64]+avx+fma")]
 #[inline]
 pub fn inverse_f32_in_place(
     operations: &Vec<Operation<f32>>,
     input: &mut [Complex<f32>],
     work: &mut [Complex<f32>],
 ) {
-    //#[static_dispatch]
-    //use apply_f32;
+    #[static_dispatch]
+    use apply_f32;
     let mut data_in_work = false;
     for op in operations {
         let (from, to): (&mut _, &mut _) = if data_in_work {

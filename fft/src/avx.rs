@@ -15,11 +15,29 @@ pub unsafe fn rotate(z: __m256, forward: bool) -> __m256 {
 
 #[multiversion::target("[x86|x86_64]+avx")]
 #[inline]
-pub unsafe fn mul(a: __m256, b: __m256) -> __m256 {
+pub unsafe fn mul_avx(a: __m256, b: __m256) -> __m256 {
     let a_re = _mm256_moveldup_ps(a);
     let a_im = _mm256_movehdup_ps(a);
     let b_sh = _mm256_permute_ps(b, 0xb1);
     _mm256_addsub_ps(_mm256_mul_ps(a_re, b), _mm256_mul_ps(a_im, b_sh))
+}
+
+#[multiversion::target("[x86|x86_64]+avx+fma")]
+#[inline]
+pub unsafe fn mul_fma(a: __m256, b: __m256) -> __m256 {
+    let a_re = _mm256_moveldup_ps(a);
+    let a_im = _mm256_movehdup_ps(a);
+    let b_sh = _mm256_permute_ps(b, 0xb1);
+    _mm256_fmaddsub_ps(a_re, b, _mm256_mul_ps(a_im, b_sh))
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => mul_avx,
+    "[x86|x86_64]+avx+fma" => mul_fma
+)]
+#[inline]
+pub unsafe fn mul(_a: __m256, _b: __m256) -> __m256 {
+    unimplemented!("this function only supports avx or avx+fma!")
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]

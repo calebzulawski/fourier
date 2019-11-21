@@ -19,7 +19,6 @@ macro_rules! implement_avx_f32 {
             assert_eq!($output.len(), size * stride);
             assert!(*stride != 0);
 
-            use crate::avx;
             #[cfg(target_arch = "x86")]
             use std::arch::x86::*;
             #[cfg(target_arch = "x86_64")]
@@ -49,7 +48,7 @@ macro_rules! implement_avx_f32 {
                     scratch = $butterfly(scratch, *forward);
                     if *size != $radix {
                         for k in 0..($radix - 1) {
-                            scratch[k + 1] = avx::mul(scratch[k + 1], wi[k]);
+                            scratch[k + 1] = mul(scratch[k + 1], wi[k]);
                         }
                     }
 
@@ -63,7 +62,7 @@ macro_rules! implement_avx_f32 {
                 // Apply the final partial vector
                 if partial_count > 0 {
                     // Load a partial vector
-                    let mask = avx::partial_mask(partial_count);
+                    let mask = crate::avx::partial_mask(partial_count);
                     let mut scratch = [_mm256_setzero_ps(); $radix];
                     let load = $input.as_ptr().add(full_count + stride * i);
                     for k in 0..$radix {
@@ -74,7 +73,7 @@ macro_rules! implement_avx_f32 {
                     scratch = $butterfly(scratch, *forward);
                     if *size != $radix {
                         for k in 0..($radix - 1) {
-                            scratch[k + 1] = avx::mul(scratch[k + 1], wi[k]);
+                            scratch[k + 1] = mul(scratch[k + 1], wi[k]);
                         }
                     }
 

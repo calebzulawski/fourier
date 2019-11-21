@@ -12,3 +12,4 @@ num-complex = "0.2"
 
 [profile.release]
 debug = true
+panic = "abort"

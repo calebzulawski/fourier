@@ -43,11 +43,21 @@ pub fn radix2<T: FftFloat>(x: &[Complex<T>], y: &mut [Complex<T>], config: &Radi
 
 #[multiversion::target("[x86|x86_64]+avx")]
 unsafe fn radix2_f32_avx(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix2<f32>) {
+    #[static_dispatch]
+    use crate::avx::mul;
+    crate::implement_avx_f32! {2, x, y, &config.base, butterfly_avx}
+}
+
+#[multiversion::target("[x86|x86_64]+avx+fma")]
+unsafe fn radix2_f32_fma(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix2<f32>) {
+    #[static_dispatch]
+    use crate::avx::mul;
     crate::implement_avx_f32! {2, x, y, &config.base, butterfly_avx}
 }
 
 #[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix2_f32_avx
+    "[x86|x86_64]+avx" => radix2_f32_avx,
+    "[x86|x86_64]+avx+fma" => radix2_f32_fma
 )]
 pub fn radix2_f32(x: &[Complex<f32>], y: &mut [Complex<f32>], config: &Radix2<f32>) {
     radix2(x, y, config);

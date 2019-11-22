@@ -1,6 +1,8 @@
 use crate::float::FftFloat;
 use num_complex::Complex;
 
+mod vector;
+
 mod avx;
 mod generic;
 

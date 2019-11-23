@@ -5,7 +5,7 @@ pub mod avx;
 
 pub mod generic;
 
-pub trait ComplexVector {
+pub trait ComplexVector: Copy {
     type Float;
     const WIDTH: usize;
 

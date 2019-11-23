@@ -5,6 +5,7 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+#[derive(Copy, Clone)]
 pub struct Avx32(__m256);
 
 impl super::ComplexVector for Avx32 {

@@ -1,4 +1,4 @@
-use fft::Fft32;
+use fft::{Fft, Fft32};
 use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 use serde::Deserialize;

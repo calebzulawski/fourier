@@ -1,6 +1,9 @@
 use num_complex::Complex;
 
-mod avx;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+pub mod avx;
+
+pub mod generic;
 
 pub trait ComplexVector {
     type Float;

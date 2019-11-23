@@ -194,11 +194,11 @@ fn get_stages<T: FftFloat>(size: usize) -> (Vec<Stage<T>>, Vec<Stage<T>>) {
     let mut subsize = size;
     let mut stride = 1usize;
     while subsize != 1 {
-        if subsize % 2 == 0 {
-            forward_stages.push(Stage::new(2, subsize, stride, true));
-            inverse_stages.push(Stage::new(2, subsize, stride, false));
-            subsize /= 2;
-            stride *= 2;
+        if subsize % 4 == 0 {
+            forward_stages.push(Stage::new(4, subsize, stride, true));
+            inverse_stages.push(Stage::new(4, subsize, stride, false));
+            subsize /= 4;
+            stride *= 4;
             continue;
         }
         if subsize % 3 == 0 {
@@ -208,11 +208,11 @@ fn get_stages<T: FftFloat>(size: usize) -> (Vec<Stage<T>>, Vec<Stage<T>>) {
             stride *= 3;
             continue;
         }
-        if subsize % 4 == 0 {
-            forward_stages.push(Stage::new(4, subsize, stride, true));
-            inverse_stages.push(Stage::new(4, subsize, stride, false));
-            subsize /= 4;
-            stride *= 4;
+        if subsize % 2 == 0 {
+            forward_stages.push(Stage::new(2, subsize, stride, true));
+            inverse_stages.push(Stage::new(2, subsize, stride, false));
+            subsize /= 2;
+            stride *= 2;
             continue;
         }
         unimplemented!("unsupported radix");

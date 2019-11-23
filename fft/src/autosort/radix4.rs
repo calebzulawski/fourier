@@ -8,12 +8,18 @@ pub struct Radix4 {
     forward: bool,
 }
 
-impl<T: FftFloat> Butterfly<T, 4> for Radix4 {
-    fn new(forward: bool) -> Self {
+impl Radix4 {
+    pub fn create(forward: bool) -> Self {
         Self {
             radix2: Radix2,
             forward,
         }
+    }
+}
+
+impl<T: FftFloat> Butterfly<T, 4> for Radix4 {
+    fn new(forward: bool) -> Self {
+        Radix4::create(forward)
     }
 
     #[inline(always)]

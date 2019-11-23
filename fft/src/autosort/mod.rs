@@ -7,10 +7,12 @@ use std::mem::MaybeUninit;
 mod radix2;
 mod radix3;
 mod radix4;
+mod radix8;
 use crate::vector::ComplexVector;
 use radix2::Radix2;
 use radix3::Radix3;
 use radix4::Radix4;
+use radix8::Radix8;
 
 #[inline(always)]
 fn zeroed_array<T, Vector: crate::vector::ComplexVector<Float = T>, const RADIX: usize>(
@@ -166,6 +168,7 @@ enum Stage<T: FftFloat> {
     Radix2(ButterflyStage<T, Radix2, 2>),
     Radix3(ButterflyStage<T, Radix3<T>, 3>),
     Radix4(ButterflyStage<T, Radix4, 4>),
+    Radix8(ButterflyStage<T, Radix8<T>, 8>),
 }
 
 impl<T: FftFloat> Stage<T> {
@@ -178,6 +181,9 @@ impl<T: FftFloat> Stage<T> {
         }
         if radix == 4 {
             return Self::Radix4(ButterflyStage::new(size, stride, forward));
+        }
+        if radix == 8 {
+            return Self::Radix8(ButterflyStage::new(size, stride, forward));
         }
         unimplemented!("unsupported radix");
     }
@@ -192,6 +198,7 @@ impl<T: FftFloat> Stage<T> {
             Self::Radix2(stage) => stage.apply::<V>(input, output),
             Self::Radix3(stage) => stage.apply::<V>(input, output),
             Self::Radix4(stage) => stage.apply::<V>(input, output),
+            Self::Radix8(stage) => stage.apply::<V>(input, output),
         }
     }
 }
@@ -201,7 +208,20 @@ fn get_stages<T: FftFloat>(size: usize) -> (Vec<Stage<T>>, Vec<Stage<T>>) {
     let mut inverse_stages = Vec::new();
     let mut subsize = size;
     let mut stride = 1usize;
+    if subsize % 4 == 0 {
+        forward_stages.push(Stage::new(4, subsize, stride, true));
+        inverse_stages.push(Stage::new(4, subsize, stride, false));
+        subsize /= 4;
+        stride *= 4;
+    }
     while subsize != 1 {
+        if subsize % 8 == 0 {
+            forward_stages.push(Stage::new(8, subsize, stride, true));
+            inverse_stages.push(Stage::new(8, subsize, stride, false));
+            subsize /= 8;
+            stride *= 8;
+            continue;
+        }
         if subsize % 4 == 0 {
             forward_stages.push(Stage::new(4, subsize, stride, true));
             inverse_stages.push(Stage::new(4, subsize, stride, false));

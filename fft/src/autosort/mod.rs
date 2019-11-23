@@ -78,10 +78,20 @@ where
             assert_eq!(input.len(), bfly.size * bfly.stride);
             assert_eq!(output.len(), bfly.size * bfly.stride);
 
-            let m = bfly.size / RADIX;
-            let full_count = (bfly.stride / Vector::WIDTH) * Vector::WIDTH;
-            let partial_count = bfly.stride - full_count;
+            enum Method {
+                FullWidth((usize, usize)),
+                PartialWidth,
+            }
 
+            let method = if bfly.stride >= Vector::WIDTH {
+                let full_count = ((bfly.stride - 1) / Vector::WIDTH) * Vector::WIDTH;
+                let final_offset = bfly.stride - Vector::WIDTH;
+                Method::FullWidth((full_count, final_offset))
+            } else {
+                Method::PartialWidth
+            };
+
+            let m = bfly.size / RADIX;
             for i in 0..m {
                 // Load twiddle factors
                 let twiddles = {
@@ -93,38 +103,40 @@ where
                     twiddles
                 };
 
-                // Loop over full vectors
-                for j in (0..full_count).step_by(Vector::WIDTH) {
-                    // Load full vectors
-                    let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
-                    let load = unsafe { input.as_ptr().add(j + bfly.stride * i) };
-                    for k in 0..RADIX {
-                        scratch[k] = unsafe { Vector::load(load.add(bfly.stride * k * m)) };
-                    }
+                if let Method::FullWidth((full_count, final_offset)) = method {
+                    // Loop over full vectors, with a final overlapping vector
+                    for j in (0..full_count)
+                        .step_by(Vector::WIDTH)
+                        .chain(std::iter::once(final_offset))
+                    {
+                        // Load full vectors
+                        let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
+                        let load = unsafe { input.as_ptr().add(j + bfly.stride * i) };
+                        for k in 0..RADIX {
+                            scratch[k] = unsafe { Vector::load(load.add(bfly.stride * k * m)) };
+                        }
 
-                    // Butterfly with optional twiddles
-                    scratch = unsafe { bfly.butterfly.apply(scratch) };
-                    if bfly.size != RADIX {
-                        for k in 1..RADIX {
-                            scratch[k] = unsafe { scratch[k].mul(&twiddles[k]) };
+                        // Butterfly with optional twiddles
+                        scratch = unsafe { bfly.butterfly.apply(scratch) };
+                        if bfly.size != RADIX {
+                            for k in 1..RADIX {
+                                scratch[k] = unsafe { scratch[k].mul(&twiddles[k]) };
+                            }
+                        }
+
+                        // Store full vectors
+                        let store = unsafe { output.as_mut_ptr().add(j + RADIX * bfly.stride * i) };
+                        for k in 0..RADIX {
+                            unsafe { scratch[k].store(store.add(bfly.stride * k)) };
                         }
                     }
-
-                    // Store full vectors
-                    let store = unsafe { output.as_mut_ptr().add(j + RADIX * bfly.stride * i) };
-                    for k in 0..RADIX {
-                        unsafe { scratch[k].store(store.add(bfly.stride * k)) };
-                    }
-                }
-
-                // Apply the final partial vector
-                if partial_count > 0 {
+                } else {
                     // Load a partial vector
                     let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
-                    let load = unsafe { input.as_ptr().add(full_count + bfly.stride * i) };
+                    let load = unsafe { input.as_ptr().add(bfly.stride * i) };
                     for k in 0..RADIX {
                         scratch[k] = unsafe {
-                            Vector::partial_load(load.add(bfly.stride * k * m), partial_count)
+                            Vector::partial_load(load.add(bfly.stride * k * m), bfly.stride)
                         };
                     }
 
@@ -137,14 +149,10 @@ where
                     }
 
                     // Store a partial vector
-                    let store = unsafe {
-                        output
-                            .as_mut_ptr()
-                            .add(full_count + RADIX * bfly.stride * i)
-                    };
+                    let store = unsafe { output.as_mut_ptr().add(RADIX * bfly.stride * i) };
                     for k in 0..RADIX {
                         unsafe {
-                            scratch[k].partial_store(store.add(bfly.stride * k), partial_count)
+                            scratch[k].partial_store(store.add(bfly.stride * k), bfly.stride)
                         };
                     }
                 }

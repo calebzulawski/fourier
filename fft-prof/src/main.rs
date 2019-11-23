@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use fft::Fft;
 use num_complex::Complex;
 use rand::{distributions::Standard, Rng};
 

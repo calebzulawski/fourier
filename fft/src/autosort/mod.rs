@@ -37,7 +37,6 @@ struct ButterflyStage<T, Bfly, const RADIX: usize> {
     butterfly: Bfly,
     twiddles: Vec<Complex<T>>,
     size: usize,
-    stride: usize,
 }
 
 impl<T, Bfly, const RADIX: usize> ButterflyStage<T, Bfly, { RADIX }>
@@ -45,7 +44,7 @@ where
     T: FftFloat,
     Bfly: Butterfly<T, { RADIX }>,
 {
-    fn new(size: usize, stride: usize, forward: bool) -> Self {
+    fn new(size: usize, forward: bool) -> Self {
         assert_eq!(size % RADIX, 0);
         let m = size / RADIX;
         let mut twiddles = Vec::new();
@@ -58,7 +57,6 @@ where
             butterfly: Bfly::new(forward),
             twiddles,
             size,
-            stride,
         }
     }
 
@@ -77,17 +75,16 @@ where
             Vector: crate::vector::ComplexVector<Float = T>,
             Bfly: Butterfly<T, { RADIX }>,
         {
-            assert_eq!(input.len(), bfly.size * bfly.stride);
-            assert_eq!(output.len(), bfly.size * bfly.stride);
-
+            assert_eq!(input.len(), output.len());
+            let stride = input.len() / bfly.size;
             enum Method {
                 FullWidth((usize, usize)),
                 PartialWidth,
             }
 
-            let method = if bfly.stride >= Vector::WIDTH {
-                let full_count = ((bfly.stride - 1) / Vector::WIDTH) * Vector::WIDTH;
-                let final_offset = bfly.stride - Vector::WIDTH;
+            let method = if stride >= Vector::WIDTH {
+                let full_count = ((stride - 1) / Vector::WIDTH) * Vector::WIDTH;
+                let final_offset = stride - Vector::WIDTH;
                 Method::FullWidth((full_count, final_offset))
             } else {
                 Method::PartialWidth
@@ -113,9 +110,9 @@ where
                     {
                         // Load full vectors
                         let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
-                        let load = unsafe { input.as_ptr().add(j + bfly.stride * i) };
+                        let load = unsafe { input.as_ptr().add(j + stride * i) };
                         for k in 0..RADIX {
-                            scratch[k] = unsafe { Vector::load(load.add(bfly.stride * k * m)) };
+                            scratch[k] = unsafe { Vector::load(load.add(stride * k * m)) };
                         }
 
                         // Butterfly with optional twiddles
@@ -127,19 +124,18 @@ where
                         }
 
                         // Store full vectors
-                        let store = unsafe { output.as_mut_ptr().add(j + RADIX * bfly.stride * i) };
+                        let store = unsafe { output.as_mut_ptr().add(j + RADIX * stride * i) };
                         for k in 0..RADIX {
-                            unsafe { scratch[k].store(store.add(bfly.stride * k)) };
+                            unsafe { scratch[k].store(store.add(stride * k)) };
                         }
                     }
                 } else {
                     // Load a partial vector
                     let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
-                    let load = unsafe { input.as_ptr().add(bfly.stride * i) };
+                    let load = unsafe { input.as_ptr().add(stride * i) };
                     for k in 0..RADIX {
-                        scratch[k] = unsafe {
-                            Vector::partial_load(load.add(bfly.stride * k * m), bfly.stride)
-                        };
+                        scratch[k] =
+                            unsafe { Vector::partial_load(load.add(stride * k * m), stride) };
                     }
 
                     // Butterfly with optional twiddles
@@ -151,11 +147,9 @@ where
                     }
 
                     // Store a partial vector
-                    let store = unsafe { output.as_mut_ptr().add(RADIX * bfly.stride * i) };
+                    let store = unsafe { output.as_mut_ptr().add(RADIX * stride * i) };
                     for k in 0..RADIX {
-                        unsafe {
-                            scratch[k].partial_store(store.add(bfly.stride * k), bfly.stride)
-                        };
+                        unsafe { scratch[k].partial_store(store.add(stride * k), stride) };
                     }
                 }
             }
@@ -172,18 +166,18 @@ enum Stage<T: FftFloat> {
 }
 
 impl<T: FftFloat> Stage<T> {
-    fn new(radix: usize, size: usize, stride: usize, forward: bool) -> Self {
+    fn new(radix: usize, size: usize, forward: bool) -> Self {
         if radix == 2 {
-            return Self::Radix2(ButterflyStage::new(size, stride, forward));
+            return Self::Radix2(ButterflyStage::new(size, forward));
         }
         if radix == 3 {
-            return Self::Radix3(ButterflyStage::new(size, stride, forward));
+            return Self::Radix3(ButterflyStage::new(size, forward));
         }
         if radix == 4 {
-            return Self::Radix4(ButterflyStage::new(size, stride, forward));
+            return Self::Radix4(ButterflyStage::new(size, forward));
         }
         if radix == 8 {
-            return Self::Radix8(ButterflyStage::new(size, stride, forward));
+            return Self::Radix8(ButterflyStage::new(size, forward));
         }
         unimplemented!("unsupported radix");
     }
@@ -207,40 +201,34 @@ fn get_stages<T: FftFloat>(size: usize) -> (Vec<Stage<T>>, Vec<Stage<T>>) {
     let mut forward_stages = Vec::new();
     let mut inverse_stages = Vec::new();
     let mut subsize = size;
-    let mut stride = 1usize;
     if subsize % 4 == 0 {
-        forward_stages.push(Stage::new(4, subsize, stride, true));
-        inverse_stages.push(Stage::new(4, subsize, stride, false));
+        forward_stages.push(Stage::new(4, subsize, true));
+        inverse_stages.push(Stage::new(4, subsize, false));
         subsize /= 4;
-        stride *= 4;
     }
     while subsize != 1 {
         if subsize % 8 == 0 {
-            forward_stages.push(Stage::new(8, subsize, stride, true));
-            inverse_stages.push(Stage::new(8, subsize, stride, false));
+            forward_stages.push(Stage::new(8, subsize, true));
+            inverse_stages.push(Stage::new(8, subsize, false));
             subsize /= 8;
-            stride *= 8;
             continue;
         }
         if subsize % 4 == 0 {
-            forward_stages.push(Stage::new(4, subsize, stride, true));
-            inverse_stages.push(Stage::new(4, subsize, stride, false));
+            forward_stages.push(Stage::new(4, subsize, true));
+            inverse_stages.push(Stage::new(4, subsize, false));
             subsize /= 4;
-            stride *= 4;
             continue;
         }
         if subsize % 3 == 0 {
-            forward_stages.push(Stage::new(3, subsize, stride, true));
-            inverse_stages.push(Stage::new(3, subsize, stride, false));
+            forward_stages.push(Stage::new(3, subsize, true));
+            inverse_stages.push(Stage::new(3, subsize, false));
             subsize /= 3;
-            stride *= 3;
             continue;
         }
         if subsize % 2 == 0 {
-            forward_stages.push(Stage::new(2, subsize, stride, true));
-            inverse_stages.push(Stage::new(2, subsize, stride, false));
+            forward_stages.push(Stage::new(2, subsize, true));
+            inverse_stages.push(Stage::new(2, subsize, false));
             subsize /= 2;
-            stride *= 2;
             continue;
         }
         unimplemented!("unsupported radix");

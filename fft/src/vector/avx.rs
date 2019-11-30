@@ -79,10 +79,20 @@ impl super::ComplexVector for Avx32 {
     unsafe fn partial_load(from: *const Complex<Self::Float>, count: usize) -> Self {
         assert!(count < 4);
         assert!(count > 0);
-        let has_2 = if count >= 2 { -1 } else { 0 };
-        let has_3 = if count >= 3 { -1 } else { 0 };
-        let mask = _mm256_set_epi32(0, 0, has_3, has_3, has_2, has_2, -1, -1);
-        Self(_mm256_maskload_ps(from as *const f32, mask))
+        let first = from.read();
+        let second = if count >= 2 {
+            from.add(1).read()
+        } else {
+            Complex::default()
+        };
+        let third = if count >= 3 {
+            from.add(2).read()
+        } else {
+            Complex::default()
+        };
+        Self(_mm256_set_ps(
+            0.0, 0.0, third.im, third.re, second.im, second.re, first.im, first.re,
+        ))
     }
 
     #[multiversion::target("[x86|x86_64]+avx")]

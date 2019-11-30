@@ -142,25 +142,27 @@ trait Butterfly<T, const RADIX: usize>: Sized {
                     twiddles
                 };
 
-                // Load a partial vector
-                let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
                 let load = unsafe { input.as_ptr().add(stride * i) };
-                for k in 0..RADIX {
-                    scratch[k] = unsafe { Vector::partial_load(load.add(stride * k * m), stride) };
-                }
-
-                // Butterfly with optional twiddles
-                scratch = unsafe { bfly.apply(scratch) };
-                if size != RADIX {
-                    for k in 1..RADIX {
-                        scratch[k] = unsafe { scratch[k].mul(&twiddles[k]) };
-                    }
-                }
-
-                // Store a partial vector
                 let store = unsafe { output.as_mut_ptr().add(RADIX * stride * i) };
-                for k in 0..RADIX {
-                    unsafe { scratch[k].partial_store(store.add(stride * k), stride) };
+                for j in 0..stride {
+                    // Load a partial vector
+                    let mut scratch = zeroed_array::<T, Vector, { RADIX }>();
+                    for k in 0..RADIX {
+                        scratch[k] = unsafe { Vector::load1(load.add(stride * k * m + j)) };
+                    }
+
+                    // Butterfly with optional twiddles
+                    scratch = unsafe { bfly.apply(scratch) };
+                    if size != RADIX {
+                        for k in 1..RADIX {
+                            scratch[k] = unsafe { scratch[k].mul(&twiddles[k]) };
+                        }
+                    }
+
+                    // Store a partial vector
+                    for k in 0..RADIX {
+                        unsafe { scratch[k].store1(store.add(stride * k + j)) };
+                    }
                 }
             }
         }

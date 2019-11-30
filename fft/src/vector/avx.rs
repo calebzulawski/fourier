@@ -76,6 +76,30 @@ impl super::ComplexVector for Avx32 {
 
     #[multiversion::target("[x86|x86_64]+avx")]
     #[inline]
+    unsafe fn load1(from: *const Complex<Self::Float>) -> Self {
+        Self(_mm256_set_ps(
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            from.read().im,
+            from.read().re,
+        ))
+    }
+
+    #[multiversion::target("[x86|x86_64]+avx")]
+    #[inline]
+    unsafe fn store1(&self, to: *mut Complex<Self::Float>) {
+        to.write(Complex::new(
+            _mm256_cvtss_f32(self.0),
+            _mm256_cvtss_f32(_mm256_permute_ps(self.0, 1)),
+        ))
+    }
+
+    #[multiversion::target("[x86|x86_64]+avx")]
+    #[inline]
     unsafe fn partial_load(from: *const Complex<Self::Float>, count: usize) -> Self {
         assert!(count < 4);
         assert!(count > 0);

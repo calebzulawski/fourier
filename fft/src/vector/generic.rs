@@ -54,6 +54,16 @@ impl<T: FftFloat + Default> ComplexVector for Generic<T> {
     }
 
     #[inline(always)]
+    unsafe fn load1(from: *const Complex<Self::Float>) -> Self {
+        Self(*from)
+    }
+
+    #[inline(always)]
+    unsafe fn store1(&self, to: *mut Complex<Self::Float>) {
+        *to = self.0;
+    }
+
+    #[inline(always)]
     unsafe fn partial_load(_from: *const Complex<Self::Float>, _count: usize) -> Self {
         unimplemented!("cannot partial load a generic vector")
     }

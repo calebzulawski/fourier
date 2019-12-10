@@ -15,7 +15,7 @@ fn pow2_f32(c: &mut Criterion) {
             .collect::<Vec<_>>();
 
         // My FFT
-        let mut my_fft = fft::Fft32::new(size);
+        let mut my_fft = fft::create_fft_f32(size);
         group.bench_with_input(BenchmarkId::new("Mine", size), &input, |b, i| {
             let mut input = Vec::new();
             input.extend_from_slice(i);

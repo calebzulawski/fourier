@@ -1,4 +1,4 @@
-use fft::{Fft, Fft32};
+use fft::create_fft_f32;
 use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 use serde::Deserialize;
@@ -26,7 +26,7 @@ macro_rules! generate_vector_test {
         fn $test() {
             let serialized = std::include_str!($file);
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
-            let mut fft = Fft32::new(data.x.len());
+            let mut fft = create_fft_f32(data.x.len());
             fft.fft_in_place(&mut data.x);
             println!("{:?}\n{:?}", data.x, data.y);
             near(&data.x, &data.y);
@@ -39,7 +39,7 @@ macro_rules! generate_vector_test {
         fn $test() {
             let serialized = std::include_str!($file);
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
-            let mut fft = Fft32::new(data.x.len());
+            let mut fft = create_fft_f32(data.x.len());
             fft.ifft_in_place(&mut data.y);
             println!("{:?}\n{:?}", data.x, data.y);
             near(&data.y, &data.x);

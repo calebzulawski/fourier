@@ -1,12 +1,6 @@
-use super::radix2::Radix2;
-use super::radix3::Radix3;
-use super::radix4::Radix4;
-use super::radix8::Radix8;
-use super::Butterfly;
 use crate::fft::Fft;
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
-use crate::vector::ComplexVector;
 use num_complex::Complex;
 
 fn num_factors(factor: usize, mut value: usize) -> (usize, usize) {
@@ -18,324 +12,359 @@ fn num_factors(factor: usize, mut value: usize) -> (usize, usize) {
     (count, value)
 }
 
-struct ButterflyStage<T, Bfly, const RADIX: usize> {
-    butterfly: Bfly,
-    twiddles: Vec<Complex<T>>,
+fn extend_twiddles<T: FftFloat>(
+    forward_twiddles: &mut Vec<Complex<T>>,
+    reverse_twiddles: &mut Vec<Complex<T>>,
     size: usize,
+    radix: usize,
     iterations: usize,
+) {
+    let mut subsize = size;
+    for _ in 0..iterations {
+        for i in 1..radix {
+            let m = subsize / radix;
+            for j in 0..m {
+                forward_twiddles.push(compute_twiddle(i * j, subsize, true));
+                reverse_twiddles.push(compute_twiddle(i * j, subsize, false));
+            }
+        }
+        subsize /= radix;
+    }
 }
 
-impl<T, Bfly, const RADIX: usize> ButterflyStage<T, Bfly, { RADIX }>
-where
-    T: FftFloat,
-    Bfly: Butterfly<T, { RADIX }>,
-{
-    fn new(size: usize, iterations: usize, forward: bool) -> Self {
-        let mut subsize = size;
-        assert!(iterations != 0);
-        let mut twiddles = Vec::new();
-        for _ in 0..iterations {
-            //assert_eq!(size % RADIX, 0);
-            for i in 1..RADIX {
-                let m = subsize / RADIX;
-                for j in 0..m {
-                    twiddles.push(compute_twiddle(i * j, subsize, forward));
-                }
+struct Stages<T> {
+    size: usize,
+    stages: Vec<(usize, usize)>,
+    forward_twiddles: Vec<Complex<T>>,
+    reverse_twiddles: Vec<Complex<T>>,
+}
+
+impl<T: FftFloat> Stages<T> {
+    fn new(size: usize) -> Self {
+        let mut new_size = size;
+        let mut stages = Vec::new();
+        let mut forward_twiddles = Vec::new();
+        let mut reverse_twiddles = Vec::new();
+        {
+            let (count, new_size) = num_factors(4, size);
+            if count > 0 {
+                stages.push((4, count));
+                extend_twiddles(&mut forward_twiddles, &mut reverse_twiddles, size, 4, count);
             }
-            subsize /= RADIX;
+        }
+        {
+            let (count, new_size) = num_factors(3, size);
+            if count > 0 {
+                stages.push((3, count));
+                extend_twiddles(&mut forward_twiddles, &mut reverse_twiddles, size, 3, count);
+            }
+        }
+        {
+            let (count, new_size) = num_factors(2, size);
+            if count > 0 {
+                stages.push((2, count));
+                extend_twiddles(&mut forward_twiddles, &mut reverse_twiddles, size, 2, count);
+            }
+        }
+        if size != 1 {
+            unimplemented!("unsupported radix");
         }
         Self {
-            butterfly: Bfly::new(forward),
-            twiddles,
             size,
-            iterations,
+            stages,
+            forward_twiddles,
+            reverse_twiddles,
         }
     }
+}
 
-    #[inline(always)]
-    unsafe fn apply_in_place<Vector>(
-        &self,
-        input: &mut [Complex<T>],
-        output: &mut [Complex<T>],
-    ) -> bool
-    where
-        Vector: crate::vector::ComplexVector<Float = T>,
-    {
-        #[inline(always)]
-        fn safe<T, Bfly, Vector, const RADIX: usize>(
-            bfly: &ButterflyStage<T, Bfly, { RADIX }>,
-            input: &mut [Complex<T>],
-            output: &mut [Complex<T>],
-        ) -> bool
-        where
-            T: FftFloat,
-            Bfly: Butterfly<T, { RADIX }>,
-            Vector: crate::vector::ComplexVector<Float = T>,
-        {
-            assert_eq!(input.len(), output.len());
-            assert!(bfly.iterations > 0);
-            let mut size = bfly.size;
-            let mut stride = input.len() / bfly.size;
-            let mut all_twiddles: &[Complex<T>] = &bfly.twiddles;
-            let mut iteration = 0;
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix_4_avx_narrow(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::avx_vector! {};
+    crate::stage!(narrow, 4, input, output, forward, size, stride, twiddles);
+}
 
-            // Use partial loads until the stride is large enough
-            while stride < Vector::WIDTH {
-                let (from, to): (&mut _, &mut _) = if iteration % 2 == 0 {
-                    (input, output)
-                } else {
-                    (output, input)
-                };
-                unsafe {
-                    bfly.butterfly.apply_step_partial::<Vector>(
-                        from,
-                        to,
-                        size,
-                        stride,
-                        all_twiddles,
-                    );
-                }
-                size /= RADIX;
-                stride *= RADIX;
-                all_twiddles = &all_twiddles[size * (RADIX - 1)..];
-                iteration += 1;
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix_4_avx_narrow
+)]
+fn radix_4_narrow(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::generic_vector! {};
+    crate::stage!(narrow, 4, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix_3_avx_narrow(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::avx_vector! {};
+    crate::stage!(narrow, 3, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix_3_avx_narrow
+)]
+fn radix_3_narrow(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::generic_vector! {};
+    crate::stage!(narrow, 3, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix_2_avx_narrow(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::avx_vector! {};
+    crate::stage!(narrow, 2, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix_2_avx_narrow
+)]
+fn radix_2_narrow(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::generic_vector! {};
+    crate::stage!(narrow, 2, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix_4_avx_wide(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::avx_vector! {};
+    crate::stage!(wide, 4, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix_4_avx_wide
+)]
+fn radix_4_wide(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::generic_vector! {};
+    crate::stage!(wide, 4, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix_3_avx_wide(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::avx_vector! {};
+    crate::stage!(wide, 3, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix_3_avx_wide
+)]
+fn radix_3_wide(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::generic_vector! {};
+    crate::stage!(wide, 3, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn radix_2_avx_wide(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::avx_vector! {};
+    crate::stage!(wide, 2, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => radix_2_avx_wide
+)]
+fn radix_2_wide(
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+    forward: bool,
+    size: usize,
+    stride: usize,
+    twiddles: &[Complex<f32>],
+) {
+    crate::generic_vector! {};
+    crate::stage!(wide, 2, input, output, forward, size, stride, twiddles);
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+unsafe fn width_avx() -> usize {
+    4
+}
+
+#[multiversion::multiversion(
+    "[x86|x86_64]+avx" => width_avx
+)]
+fn width() -> usize {
+    1
+}
+
+#[multiversion::target_clones("[x86|x86_64]+avx")]
+fn apply_stage(
+    input: &mut [Complex<f32>],
+    output: &mut [Complex<f32>],
+    stages: &Stages<f32>,
+    forward: bool,
+) {
+    #[static_dispatch]
+    use radix_2_narrow;
+    #[static_dispatch]
+    use radix_2_wide;
+    #[static_dispatch]
+    use radix_3_narrow;
+    #[static_dispatch]
+    use radix_3_wide;
+    #[static_dispatch]
+    use radix_4_narrow;
+    #[static_dispatch]
+    use radix_4_wide;
+    #[static_dispatch]
+    use width;
+
+    assert_eq!(input.len(), output.len());
+    assert_eq!(stages.size, input.len());
+
+    let width = width();
+
+    let mut size = stages.size;
+    let mut stride = 1;
+    let mut twiddles: &[Complex<f32>] = if forward {
+        &stages.forward_twiddles
+    } else {
+        &stages.reverse_twiddles
+    };
+    let mut iteration = 0;
+
+    for (radix, iterations) in &stages.stages {
+        // Use partial loads until the stride is large enough
+        while stride < width {
+            let (from, to): (&mut _, &mut _) = if iteration % 2 == 0 {
+                (input, output)
+            } else {
+                (output, input)
+            };
+            match radix {
+                4 => radix_4_narrow(from, to, forward, size, stride, twiddles),
+                3 => radix_3_narrow(from, to, forward, size, stride, twiddles),
+                2 => radix_2_narrow(from, to, forward, size, stride, twiddles),
+                _ => unimplemented!("unsupported radix"),
             }
+            size /= radix;
+            stride *= radix;
+            twiddles = &twiddles[size * (radix - 1)..];
+            iteration += 1;
+        }
 
-            for iteration in iteration..bfly.iterations {
-                let (from, to): (&mut _, &mut _) = if iteration % 2 == 0 {
-                    (input, output)
-                } else {
-                    (output, input)
-                };
-                unsafe {
-                    bfly.butterfly
-                        .apply_step_full::<Vector>(from, to, size, stride, all_twiddles);
-                }
-                size /= RADIX;
-                stride *= RADIX;
-                all_twiddles = &all_twiddles[size * (RADIX - 1)..];
+        for iteration in iteration..*iterations {
+            let (from, to): (&mut _, &mut _) = if iteration % 2 == 0 {
+                (input, output)
+            } else {
+                (output, input)
+            };
+            match radix {
+                4 => radix_4_wide(from, to, forward, size, stride, twiddles),
+                3 => radix_3_wide(from, to, forward, size, stride, twiddles),
+                2 => radix_2_wide(from, to, forward, size, stride, twiddles),
+                _ => unimplemented!("unsupported radix"),
             }
-
-            (bfly.iterations % 2) != 0
-        }
-        safe::<T, Bfly, Vector, { RADIX }>(&self, input, output)
-    }
-}
-
-enum Stage<T: FftFloat> {
-    Radix2(ButterflyStage<T, Radix2, 2>),
-    Radix3(ButterflyStage<T, Radix3<T>, 3>),
-    Radix4(ButterflyStage<T, Radix4, 4>),
-    Radix8(ButterflyStage<T, Radix8<T>, 8>),
-}
-
-impl<T: FftFloat> Stage<T> {
-    fn new(radix: usize, size: usize, iterations: usize, forward: bool) -> Self {
-        if radix == 2 {
-            return Self::Radix2(ButterflyStage::new(size, iterations, forward));
-        }
-        if radix == 3 {
-            return Self::Radix3(ButterflyStage::new(size, iterations, forward));
-        }
-        if radix == 4 {
-            return Self::Radix4(ButterflyStage::new(size, iterations, forward));
-        }
-        if radix == 8 {
-            return Self::Radix8(ButterflyStage::new(size, iterations, forward));
-        }
-        unimplemented!("unsupported radix");
-    }
-
-    #[inline(always)]
-    unsafe fn apply_in_place<V: ComplexVector<Float = T>>(
-        &self,
-        input: &mut [Complex<T>],
-        output: &mut [Complex<T>],
-    ) -> bool {
-        match self {
-            Self::Radix2(stage) => stage.apply_in_place::<V>(input, output),
-            Self::Radix3(stage) => stage.apply_in_place::<V>(input, output),
-            Self::Radix4(stage) => stage.apply_in_place::<V>(input, output),
-            Self::Radix8(stage) => stage.apply_in_place::<V>(input, output),
+            size /= radix;
+            stride *= radix;
+            twiddles = &twiddles[size * (radix - 1)..];
         }
     }
-
-    /*
-    #[inline(always)]
-    unsafe fn apply_out_of_place<V: ComplexVector<Float = T>>(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        work: &mut [Complex<T>],
-    ) -> bool {
-        match self {
-            Self::Radix2(stage) => stage.apply_out_of_place::<V>(input, output, work),
-            Self::Radix3(stage) => stage.apply_out_of_place::<V>(input, output, work),
-            Self::Radix4(stage) => stage.apply_out_of_place::<V>(input, output, work),
-            Self::Radix8(stage) => stage.apply_out_of_place::<V>(input, output, work),
-        }
-    }
-    */
-}
-
-fn get_stages<T: FftFloat>(mut size: usize) -> (Vec<Stage<T>>, Vec<Stage<T>>) {
-    let mut forward_stages = Vec::new();
-    let mut inverse_stages = Vec::new();
-    /*
-    {
-        let (count, new_size) = num_factors(8, size);
-        if count > 0 {
-            forward_stages.push(Stage::new(8, size, count, true));
-            inverse_stages.push(Stage::new(8, size, count, false));
-            size = new_size;
-        }
-    }
-    */
-    {
-        let (count, new_size) = num_factors(4, size);
-        if count > 0 {
-            forward_stages.push(Stage::new(4, size, count, true));
-            inverse_stages.push(Stage::new(4, size, count, false));
-            size = new_size;
-        }
-    }
-    {
-        let (count, new_size) = num_factors(3, size);
-        if count > 0 {
-            forward_stages.push(Stage::new(3, size, count, true));
-            inverse_stages.push(Stage::new(3, size, count, false));
-            size = new_size;
-        }
-    }
-    {
-        let (count, new_size) = num_factors(2, size);
-        if count > 0 {
-            forward_stages.push(Stage::new(2, size, count, true));
-            inverse_stages.push(Stage::new(2, size, count, false));
-            size = new_size;
-        }
-    }
-    if size != 1 {
-        unimplemented!("unsupported radix");
-    }
-    (forward_stages, inverse_stages)
-}
-
-#[inline(always)]
-unsafe fn forward_in_place_impl<T, Vector>(
-    stages: &Vec<Stage<T>>,
-    input: &mut [Complex<T>],
-    work: &mut [Complex<T>],
-) where
-    T: FftFloat,
-    Vector: ComplexVector<Float = T>,
-{
-    let mut data_in_work = false;
-    for stage in stages {
-        let (from, to): (&mut _, &mut _) = if data_in_work {
-            (work, input)
-        } else {
-            (input, work)
-        };
-        data_in_work ^= stage.apply_in_place::<Vector>(from, to);
-    }
-    if data_in_work {
-        input.copy_from_slice(&work);
-    }
-}
-
-#[inline(always)]
-unsafe fn inverse_in_place_impl<T, Vector>(
-    stages: &Vec<Stage<T>>,
-    input: &mut [Complex<T>],
-    work: &mut [Complex<T>],
-) where
-    T: FftFloat,
-    Vector: ComplexVector<Float = T>,
-{
-    let mut data_in_work = false;
-    for stage in stages {
-        let (from, to): (&mut _, &mut _) = if data_in_work {
-            (work, input)
-        } else {
-            (input, work)
-        };
-        data_in_work ^= stage.apply_in_place::<Vector>(from, to);
-    }
-    let scale = T::from_usize(input.len()).unwrap();
-    if data_in_work {
-        for (x, y) in work.iter().zip(input.iter_mut()) {
-            *y = x / scale;
+    let data_in_output = (&stages
+        .stages
+        .iter()
+        .map(|(_, count)| count)
+        .fold(0, |sum, item| sum + item)
+        % 2)
+        != 0;
+    if forward {
+        if data_in_output {
+            input.copy_from_slice(output);
         }
     } else {
-        for x in input.iter_mut() {
-            *x /= scale;
+        let scale = stages.size as f32;
+        if data_in_output {
+            for (x, y) in output.iter().zip(input.iter_mut()) {
+                *y = x / scale;
+            }
+        } else {
+            for x in input.iter_mut() {
+                *x /= scale;
+            }
         }
     }
 }
 
-#[multiversion::target("[x86|x86_64]+avx")]
-#[inline]
-unsafe fn forward_in_place_f32_avx(
-    stages: &Vec<Stage<f32>>,
-    input: &mut [Complex<f32>],
-    work: &mut [Complex<f32>],
-) {
-    forward_in_place_impl::<f32, crate::vector::avx::Avx32>(stages, input, work);
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => forward_in_place_f32_avx
-)]
-#[inline]
-fn forward_in_place_f32(
-    stages: &Vec<Stage<f32>>,
-    input: &mut [Complex<f32>],
-    work: &mut [Complex<f32>],
-) {
-    unsafe {
-        forward_in_place_impl::<f32, crate::vector::generic::Generic<f32>>(stages, input, work);
-    }
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
-#[inline]
-unsafe fn inverse_in_place_f32_avx(
-    stages: &Vec<Stage<f32>>,
-    input: &mut [Complex<f32>],
-    work: &mut [Complex<f32>],
-) {
-    inverse_in_place_impl::<f32, crate::vector::avx::Avx32>(stages, input, work);
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => inverse_in_place_f32_avx
-)]
-#[inline]
-fn inverse_in_place_f32(
-    stages: &Vec<Stage<f32>>,
-    input: &mut [Complex<f32>],
-    work: &mut [Complex<f32>],
-) {
-    unsafe {
-        inverse_in_place_impl::<f32, crate::vector::generic::Generic<f32>>(stages, input, work);
-    }
-}
-
-pub struct PrimeFactorFft32 {
-    size: usize,
-    forward_stages: Vec<Stage<f32>>,
-    inverse_stages: Vec<Stage<f32>>,
+struct PrimeFactorFft32 {
+    stages: Stages<f32>,
     work: Box<[Complex<f32>]>,
 }
 
 impl PrimeFactorFft32 {
-    pub fn new(size: usize) -> Self {
-        let (forward_stages, inverse_stages) = get_stages(size);
+    fn new(size: usize) -> Self {
         Self {
-            size,
-            forward_stages,
-            inverse_stages,
+            stages: Stages::new(size),
             work: vec![Complex::default(); size].into_boxed_slice(),
         }
     }
@@ -345,12 +374,10 @@ impl Fft for PrimeFactorFft32 {
     type Float = f32;
 
     fn fft_in_place(&mut self, input: &mut [Complex<f32>]) {
-        assert_eq!(input.len(), self.size, "input must match configured size");
-        forward_in_place_f32(&self.forward_stages, input, &mut self.work);
+        apply_stage(input, &mut self.work, &self.stages, true);
     }
 
     fn ifft_in_place(&mut self, input: &mut [Complex<f32>]) {
-        assert_eq!(input.len(), self.size, "input must match configured size");
-        inverse_in_place_f32(&self.inverse_stages, input, &mut self.work);
+        apply_stage(input, &mut self.work, &self.stages, false);
     }
 }

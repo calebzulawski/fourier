@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! stage {
     {
-        wide, $radix:literal, $input:ident, $output:ident, $forward: expr, $size:expr, $stride:expr, $stage_twiddles:expr
+        wide, $radix:literal, $butterfly:ident, $input:ident, $output:ident, $forward: expr, $size:expr, $stride:expr, $stage_twiddles:expr
     } => {
         {
             let m = $size / $radix;
@@ -33,7 +33,7 @@ macro_rules! stage {
                     }
 
                     // Butterfly with optional twiddles
-//                    scratch = butterfly!($radix, scratch, $forward);
+                    scratch = $butterfly!(scratch, $forward);
                     if $size != $radix {
                         for k in 1..$radix {
                             scratch[k] = mul!(scratch[k], twiddles[k]);
@@ -50,7 +50,7 @@ macro_rules! stage {
         }
     };
     {
-        narrow, $radix:literal, $input:ident, $output:ident, $forward: expr, $size:expr, $stride:expr, $stage_twiddles:expr
+        narrow, $radix:literal, $butterfly:ident, $input:ident, $output:ident, $forward: expr, $size:expr, $stride:expr, $stage_twiddles:expr
     } => {
         {
             let m = $size / $radix;
@@ -76,7 +76,7 @@ macro_rules! stage {
                     }
 
                     // Butterfly with optional twiddles
-//                    scratch = butterfly!($radix, scratch, $forward);
+                    scratch = $butterfly!(scratch, $forward);
                     if $size != $radix {
                         for k in 1..$radix {
                             scratch[k] = mul!(scratch[k], twiddles[k]);

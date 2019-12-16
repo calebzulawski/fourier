@@ -3,4 +3,4 @@ mod stage;
 #[macro_use]
 mod butterfly;
 
-mod prime_factor;
+pub(crate) mod prime_factor;

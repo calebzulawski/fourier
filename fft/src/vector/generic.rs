@@ -30,7 +30,7 @@ macro_rules! generic_vector {
         macro_rules! rotate {
             { $z:expr, $positive:expr } => {
                 {
-                    if positive {
+                    if $positive {
                         Complex::new(-$z.im, $z.re)
                     } else {
                         Complex::new($z.im, -$z.re)

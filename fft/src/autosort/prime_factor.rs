@@ -41,32 +41,53 @@ struct Stages<T> {
 
 impl<T: FftFloat> Stages<T> {
     fn new(size: usize) -> Self {
-        let mut new_size = size;
+        let mut current_size = size;
         let mut stages = Vec::new();
         let mut forward_twiddles = Vec::new();
         let mut reverse_twiddles = Vec::new();
         {
-            let (count, new_size) = num_factors(4, size);
+            let (count, new_size) = num_factors(4, current_size);
             if count > 0 {
                 stages.push((4, count));
-                extend_twiddles(&mut forward_twiddles, &mut reverse_twiddles, size, 4, count);
+                extend_twiddles(
+                    &mut forward_twiddles,
+                    &mut reverse_twiddles,
+                    current_size,
+                    4,
+                    count,
+                );
             }
+            current_size = new_size;
         }
         {
-            let (count, new_size) = num_factors(3, size);
+            let (count, new_size) = num_factors(3, current_size);
             if count > 0 {
                 stages.push((3, count));
-                extend_twiddles(&mut forward_twiddles, &mut reverse_twiddles, size, 3, count);
+                extend_twiddles(
+                    &mut forward_twiddles,
+                    &mut reverse_twiddles,
+                    current_size,
+                    3,
+                    count,
+                );
             }
+            current_size = new_size;
         }
         {
-            let (count, new_size) = num_factors(2, size);
+            let (count, new_size) = num_factors(2, current_size);
             if count > 0 {
                 stages.push((2, count));
-                extend_twiddles(&mut forward_twiddles, &mut reverse_twiddles, size, 2, count);
+                extend_twiddles(
+                    &mut forward_twiddles,
+                    &mut reverse_twiddles,
+                    current_size,
+                    2,
+                    count,
+                );
             }
+            current_size = new_size;
         }
-        if size != 1 {
+        if current_size != 1 {
             unimplemented!("unsupported radix");
         }
         Self {
@@ -88,7 +109,7 @@ unsafe fn radix_4_avx_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(narrow, 4, input, output, forward, size, stride, twiddles);
+    crate::stage!(narrow, 4, butterfly4, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::multiversion(
@@ -103,7 +124,7 @@ fn radix_4_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(narrow, 4, input, output, forward, size, stride, twiddles);
+    crate::stage!(narrow, 4, butterfly4, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -116,7 +137,7 @@ unsafe fn radix_3_avx_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(narrow, 3, input, output, forward, size, stride, twiddles);
+    crate::stage!(narrow, 3, butterfly3, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::multiversion(
@@ -131,7 +152,7 @@ fn radix_3_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(narrow, 3, input, output, forward, size, stride, twiddles);
+    crate::stage!(narrow, 3, butterfly3, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -144,7 +165,7 @@ unsafe fn radix_2_avx_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(narrow, 2, input, output, forward, size, stride, twiddles);
+    crate::stage!(narrow, 2, butterfly2, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::multiversion(
@@ -159,7 +180,7 @@ fn radix_2_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(narrow, 2, input, output, forward, size, stride, twiddles);
+    crate::stage!(narrow, 2, butterfly2, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -172,7 +193,7 @@ unsafe fn radix_4_avx_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(wide, 4, input, output, forward, size, stride, twiddles);
+    crate::stage!(wide, 4, butterfly4, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::multiversion(
@@ -187,7 +208,7 @@ fn radix_4_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(wide, 4, input, output, forward, size, stride, twiddles);
+    crate::stage!(wide, 4, butterfly4, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -200,7 +221,7 @@ unsafe fn radix_3_avx_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(wide, 3, input, output, forward, size, stride, twiddles);
+    crate::stage!(wide, 3, butterfly3, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::multiversion(
@@ -215,7 +236,7 @@ fn radix_3_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(wide, 3, input, output, forward, size, stride, twiddles);
+    crate::stage!(wide, 3, butterfly3, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -228,7 +249,7 @@ unsafe fn radix_2_avx_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(wide, 2, input, output, forward, size, stride, twiddles);
+    crate::stage!(wide, 2, butterfly2, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::multiversion(
@@ -243,7 +264,7 @@ fn radix_2_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(wide, 2, input, output, forward, size, stride, twiddles);
+    crate::stage!(wide, 2, butterfly2, input, output, forward, size, stride, twiddles);
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -356,13 +377,13 @@ fn apply_stage(
     }
 }
 
-struct PrimeFactorFft32 {
+pub struct PrimeFactorFft32 {
     stages: Stages<f32>,
     work: Box<[Complex<f32>]>,
 }
 
 impl PrimeFactorFft32 {
-    fn new(size: usize) -> Self {
+    pub fn new(size: usize) -> Self {
         Self {
             stages: Stages::new(size),
             work: vec![Complex::default(); size].into_boxed_slice(),

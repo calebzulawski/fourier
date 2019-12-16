@@ -31,7 +31,7 @@ macro_rules! avx_vector {
         }
 
         macro_rules! sub {
-            { $a:expr, $b:expr } => { unsafe { _mm256_add_ps($a, $b) } }
+            { $a:expr, $b:expr } => { unsafe { _mm256_sub_ps($a, $b) } }
         }
 
         macro_rules! mul {

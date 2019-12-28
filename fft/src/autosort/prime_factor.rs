@@ -1,3 +1,6 @@
+#![allow(unused_unsafe)]
+#![allow(unused_macros)]
+
 use crate::fft::Fft;
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
@@ -21,9 +24,9 @@ fn extend_twiddles<T: FftFloat>(
 ) {
     let mut subsize = size;
     for _ in 0..iterations {
-        for i in 1..radix {
-            let m = subsize / radix;
-            for j in 0..m {
+        let m = subsize / radix;
+        for i in 0..m {
+            for j in 1..radix {
                 forward_twiddles.push(compute_twiddle(i * j, subsize, true));
                 reverse_twiddles.push(compute_twiddle(i * j, subsize, false));
             }
@@ -45,6 +48,21 @@ impl<T: FftFloat> Stages<T> {
         let mut stages = Vec::new();
         let mut forward_twiddles = Vec::new();
         let mut reverse_twiddles = Vec::new();
+
+        {
+            let (count, new_size) = num_factors(4, current_size);
+            if count > 0 {
+                stages.push((4, count));
+                extend_twiddles(
+                    &mut forward_twiddles,
+                    &mut reverse_twiddles,
+                    current_size,
+                    4,
+                    count,
+                );
+            }
+            current_size = new_size;
+        }
         {
             let (count, new_size) = num_factors(4, current_size);
             if count > 0 {
@@ -109,7 +127,18 @@ unsafe fn radix_4_avx_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(narrow, 4, butterfly4, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
+    crate::stage!(
+        narrow,
+        4,
+        butterfly4,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::multiversion(
@@ -124,7 +153,18 @@ fn radix_4_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(narrow, 4, butterfly4, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
+    crate::stage!(
+        narrow,
+        4,
+        butterfly4,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -137,7 +177,18 @@ unsafe fn radix_3_avx_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(narrow, 3, butterfly3, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
+    crate::stage!(
+        narrow,
+        3,
+        butterfly3,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::multiversion(
@@ -152,20 +203,42 @@ fn radix_3_narrow(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(narrow, 3, butterfly3, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
+    crate::stage!(
+        narrow,
+        3,
+        butterfly3,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
 unsafe fn radix_2_avx_narrow(
     input: &[Complex<f32>],
     output: &mut [Complex<f32>],
-    forward: bool,
+    _forward: bool,
     size: usize,
     stride: usize,
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(narrow, 2, butterfly2, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
+    crate::stage!(
+        narrow,
+        2,
+        butterfly2,
+        input,
+        output,
+        _forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::multiversion(
@@ -174,13 +247,24 @@ unsafe fn radix_2_avx_narrow(
 fn radix_2_narrow(
     input: &[Complex<f32>],
     output: &mut [Complex<f32>],
-    forward: bool,
+    _forward: bool,
     size: usize,
     stride: usize,
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(narrow, 2, butterfly2, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
+    crate::stage!(
+        narrow,
+        2,
+        butterfly2,
+        input,
+        output,
+        _forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -193,7 +277,18 @@ unsafe fn radix_4_avx_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(wide, 4, butterfly4, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
+    crate::stage!(
+        wide,
+        4,
+        butterfly4,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::multiversion(
@@ -208,7 +303,18 @@ fn radix_4_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(wide, 4, butterfly4, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
+    crate::stage!(
+        wide,
+        4,
+        butterfly4,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -221,7 +327,18 @@ unsafe fn radix_3_avx_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(wide, 3, butterfly3, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
+    crate::stage!(
+        wide,
+        3,
+        butterfly3,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::multiversion(
@@ -236,20 +353,42 @@ fn radix_3_wide(
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(wide, 3, butterfly3, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
+    crate::stage!(
+        wide,
+        3,
+        butterfly3,
+        input,
+        output,
+        forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
 unsafe fn radix_2_avx_wide(
     input: &[Complex<f32>],
     output: &mut [Complex<f32>],
-    forward: bool,
+    _forward: bool,
     size: usize,
     stride: usize,
     twiddles: &[Complex<f32>],
 ) {
     crate::avx_vector! {};
-    crate::stage!(wide, 2, butterfly2, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
+    crate::stage!(
+        wide,
+        2,
+        butterfly2,
+        input,
+        output,
+        _forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::multiversion(
@@ -258,13 +397,24 @@ unsafe fn radix_2_avx_wide(
 fn radix_2_wide(
     input: &[Complex<f32>],
     output: &mut [Complex<f32>],
-    forward: bool,
+    _forward: bool,
     size: usize,
     stride: usize,
     twiddles: &[Complex<f32>],
 ) {
     crate::generic_vector! {};
-    crate::stage!(wide, 2, butterfly2, input, output, forward, size, stride, twiddles);
+    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
+    crate::stage!(
+        wide,
+        2,
+        butterfly2,
+        input,
+        output,
+        _forward,
+        size,
+        stride,
+        get_twiddle
+    );
 }
 
 #[multiversion::target("[x86|x86_64]+avx")]
@@ -313,15 +463,17 @@ fn apply_stage(
     } else {
         &stages.reverse_twiddles
     };
-    let mut iteration = 0;
 
+    let mut data_in_output = false;
     for (radix, iterations) in &stages.stages {
+        let mut iteration = 0;
+
         // Use partial loads until the stride is large enough
-        while stride < width {
-            let (from, to): (&mut _, &mut _) = if iteration % 2 == 0 {
-                (input, output)
-            } else {
+        while stride < width && iteration < *iterations {
+            let (from, to): (&mut _, &mut _) = if data_in_output {
                 (output, input)
+            } else {
+                (input, output)
             };
             match radix {
                 4 => radix_4_narrow(from, to, forward, size, stride, twiddles),
@@ -333,13 +485,14 @@ fn apply_stage(
             stride *= radix;
             twiddles = &twiddles[size * (radix - 1)..];
             iteration += 1;
+            data_in_output = !data_in_output;
         }
 
-        for iteration in iteration..*iterations {
-            let (from, to): (&mut _, &mut _) = if iteration % 2 == 0 {
-                (input, output)
-            } else {
+        for _ in iteration..*iterations {
+            let (from, to): (&mut _, &mut _) = if data_in_output {
                 (output, input)
+            } else {
+                (input, output)
             };
             match radix {
                 4 => radix_4_wide(from, to, forward, size, stride, twiddles),
@@ -350,15 +503,9 @@ fn apply_stage(
             size /= radix;
             stride *= radix;
             twiddles = &twiddles[size * (radix - 1)..];
+            data_in_output = !data_in_output;
         }
     }
-    let data_in_output = (&stages
-        .stages
-        .iter()
-        .map(|(_, count)| count)
-        .fold(0, |sum, item| sum + item)
-        % 2)
-        != 0;
     if forward {
         if data_in_output {
             input.copy_from_slice(output);

@@ -1,3 +1,5 @@
+#![allow(unused_macros)]
+
 #[macro_export]
 macro_rules! generic_vector {
     {} => {

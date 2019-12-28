@@ -32,3 +32,24 @@ macro_rules! butterfly4 {
         }
     }
 }
+
+#[macro_export]
+macro_rules! butterfly8 {
+    { $input:tt, $forward:tt } => {
+        {
+            let twiddle_value = crate::twiddle::compute_twiddle(1, 8, $forward),
+            let twiddle = broadcast!(&self.twiddle);
+            let twiddle_neg = broadcast!(&Complex::new(-self.twiddle.re, self.twiddle.im));
+            let a1 = butterfly4!([x[0], x[2], x[4], x[6]], $forward);
+            let mut b1 = butterfly4!([x[1], x[3], x[5], x[7]], $forward);
+            b1[1] = mul!(b1[1], &twiddle);
+            b1[2] = rotate!(b1[2], !self.forward);
+            b1[3] = mul!(b1[3], &twiddle_neg);
+            let a2 = butterfly2!([a1[0], b1[0]], forward);
+            let b2 = butterfly2!([a1[1], b1[1]], forward);
+            let c2 = butterfly2!([a1[2], b1[2]], forward);
+            let d2 = butterfly2!([a1[3], b1[3]], forward);
+            [a2[0], b2[0], c2[0], d2[0], a2[1], b2[1], c2[1], d2[1]]
+        }
+    }
+}

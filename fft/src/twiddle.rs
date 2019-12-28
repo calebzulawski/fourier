@@ -1,6 +1,7 @@
 use crate::float::FftFloat;
 use num_complex::Complex;
 
+#[inline]
 pub fn compute_twiddle<T: FftFloat>(index: usize, size: usize, forward: bool) -> Complex<T> {
     let theta = (index * 2) as f64 * std::f64::consts::PI / size as f64;
     let twiddle = Complex::new(

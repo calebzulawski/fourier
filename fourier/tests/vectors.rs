@@ -1,4 +1,4 @@
-use fft::create_fft_f32;
+use fourier::create_fft_f32;
 use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 use serde::Deserialize;

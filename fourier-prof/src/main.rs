@@ -1,5 +1,4 @@
 use clap::{App, Arg};
-use fft::Fft;
 use num_complex::Complex;
 use rand::{distributions::Standard, Rng};
 
@@ -9,7 +8,7 @@ fn main() {
         .get_matches();
 
     let size = usize::from_str_radix(matches.value_of("size").unwrap(), 10).unwrap();
-    let mut fft = fft::Fft32::new(size);
+    let mut fft = fourier::create_fft_f32(size);
 
     let mut input = rand::thread_rng()
         .sample_iter(&Standard)

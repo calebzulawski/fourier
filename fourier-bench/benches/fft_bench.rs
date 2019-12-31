@@ -1,5 +1,4 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use fft::Fft;
 use num::Complex;
 use rand::distributions::Standard;
 use rand::Rng;
@@ -14,12 +13,12 @@ fn pow2_f32(c: &mut Criterion) {
             .map(|(x, y)| Complex::new(x, y))
             .collect::<Vec<_>>();
 
-        // My FFT
-        let mut my_fft = fft::create_fft_f32(size);
-        group.bench_with_input(BenchmarkId::new("Mine", size), &input, |b, i| {
+        // Fourier
+        let mut fourier = fourier::create_fft_f32(size);
+        group.bench_with_input(BenchmarkId::new("Fourier", size), &input, |b, i| {
             let mut input = Vec::new();
             input.extend_from_slice(i);
-            b.iter(|| my_fft.fft_in_place(input.as_mut()))
+            b.iter(|| fourier.fft_in_place(input.as_mut()))
         });
 
         // RustFFT

@@ -1,5 +1,5 @@
 [package]
-name = "fft-bench"
+name = "fourier-bench"
 version = "0.1.0"
 authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
 edition = "2018"
@@ -10,7 +10,7 @@ num = "0.2"
 rand = "0.7"
 rustfft = "3"
 mkl_fft = { package = "fftw", version = "0.6", features = ["intel-mkl"], default-features = false }
-fft = { path = "../fft" }
+fourier = { path = "../fourier" }
 
 [[bench]]
 name = "fft_bench"

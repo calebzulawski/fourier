@@ -117,316 +117,66 @@ impl<T: FftFloat> Stages<T> {
     }
 }
 
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn radix_4_avx_narrow(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::avx_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
-    crate::stage!(
-        narrow,
-        4,
-        butterfly4,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
+macro_rules! make_radix_fns {
+    {
+        @impl $width:ident, $radix:literal, $name:ident, $butterfly:ident
+    } => {
+        #[multiversion::target_clones("[x86|x86_64]+avx")]
+        fn $name(
+            input: &[Complex<f32>],
+            output: &mut [Complex<f32>],
+            _forward: bool,
+            size: usize,
+            stride: usize,
+            twiddles: &[Complex<f32>],
+        ) {
+            #[target_cfg(target = "[x86|x86_64]+avx")]
+            crate::avx_vector! {};
+
+            #[target_cfg(not(target = "[x86|x86_64]+avx"))]
+            crate::generic_vector! {};
+
+            let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * ($radix - 1) + i) };
+            crate::stage!(
+                $width,
+                $radix,
+                $butterfly,
+                input,
+                output,
+                _forward,
+                size,
+                stride,
+                get_twiddle
+            );
+        }
+    };
+    {
+        $([$radix:literal, $wide_name:ident, $narrow_name:ident, $butterfly:ident]),*
+    } => {
+        $(
+            make_radix_fns! { @impl wide, $radix, $wide_name, $butterfly }
+            make_radix_fns! { @impl narrow, $radix, $narrow_name, $butterfly }
+        )*
+    };
 }
 
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix_4_avx_narrow
-)]
-fn radix_4_narrow(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::generic_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
-    crate::stage!(
-        narrow,
-        4,
-        butterfly4,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
+make_radix_fns! {
+    [2, radix_2_wide, radix_2_narrow, butterfly2],
+    [3, radix_3_wide, radix_3_narrow, butterfly3],
+    [4, radix_4_wide, radix_4_narrow, butterfly4]
 }
 
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn radix_3_avx_narrow(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::avx_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
-    crate::stage!(
-        narrow,
-        3,
-        butterfly3,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix_3_avx_narrow
-)]
-fn radix_3_narrow(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::generic_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
-    crate::stage!(
-        narrow,
-        3,
-        butterfly3,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn radix_2_avx_narrow(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    _forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::avx_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
-    crate::stage!(
-        narrow,
-        2,
-        butterfly2,
-        input,
-        output,
-        _forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix_2_avx_narrow
-)]
-fn radix_2_narrow(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    _forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::generic_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
-    crate::stage!(
-        narrow,
-        2,
-        butterfly2,
-        input,
-        output,
-        _forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn radix_4_avx_wide(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::avx_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
-    crate::stage!(
-        wide,
-        4,
-        butterfly4,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix_4_avx_wide
-)]
-fn radix_4_wide(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::generic_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 3 + i) };
-    crate::stage!(
-        wide,
-        4,
-        butterfly4,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn radix_3_avx_wide(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::avx_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
-    crate::stage!(
-        wide,
-        3,
-        butterfly3,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix_3_avx_wide
-)]
-fn radix_3_wide(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::generic_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * 2 + i) };
-    crate::stage!(
-        wide,
-        3,
-        butterfly3,
-        input,
-        output,
-        forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn radix_2_avx_wide(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    _forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::avx_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
-    crate::stage!(
-        wide,
-        2,
-        butterfly2,
-        input,
-        output,
-        _forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => radix_2_avx_wide
-)]
-fn radix_2_wide(
-    input: &[Complex<f32>],
-    output: &mut [Complex<f32>],
-    _forward: bool,
-    size: usize,
-    stride: usize,
-    twiddles: &[Complex<f32>],
-) {
-    crate::generic_vector! {};
-    let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j + i) };
-    crate::stage!(
-        wide,
-        2,
-        butterfly2,
-        input,
-        output,
-        _forward,
-        size,
-        stride,
-        get_twiddle
-    );
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
-unsafe fn width_avx() -> usize {
-    4
-}
-
-#[multiversion::multiversion(
-    "[x86|x86_64]+avx" => width_avx
-)]
+#[multiversion::target_clones("[x86|x86_64]+avx")]
 fn width() -> usize {
-    1
+    #[target_cfg(target = "[x86|x86_64]+avx")]
+    {
+        4
+    }
+
+    #[target_cfg(not(target = "[x86|x86_64]+avx"))]
+    {
+        1
+    }
 }
 
 #[multiversion::target_clones("[x86|x86_64]+avx")]

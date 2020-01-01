@@ -8,13 +8,7 @@ def jsonify_cplx(z):
 
 numpy.random.seed(1234)
 
-sizes = [
-    2, 4, 8, 16, 32, 64, 128, 256,   # powers of 2
-    3, 9, 27, 81, 243,               # powers of 3
-    6, 12, 18, 36, 54, 72, 108, 216  # mixed powers of 2 and 3
-]
-
-for size in sizes:
+for size in range(2, 257):
     x = numpy.random.normal(size=size) + numpy.random.normal(size=size)*1j
     #y = numpy.fft.fft(x)
     y = scipy.linalg.dft(x)

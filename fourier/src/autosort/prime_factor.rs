@@ -43,7 +43,7 @@ struct Stages<T> {
 }
 
 impl<T: FftFloat> Stages<T> {
-    fn new(size: usize) -> Self {
+    fn new(size: usize) -> Option<Self> {
         let mut current_size = size;
         let mut stages = Vec::new();
         let mut forward_twiddles = Vec::new();
@@ -106,13 +106,14 @@ impl<T: FftFloat> Stages<T> {
             current_size = new_size;
         }
         if current_size != 1 {
-            unimplemented!("unsupported radix");
-        }
-        Self {
-            size,
-            stages,
-            forward_twiddles,
-            reverse_twiddles,
+            None
+        } else {
+            Some(Self {
+                size,
+                stages,
+                forward_twiddles,
+                reverse_twiddles,
+            })
         }
     }
 }
@@ -274,23 +275,27 @@ fn apply_stage(
     }
 }
 
-pub struct PrimeFactorFft32 {
+struct PrimeFactor32 {
     stages: Stages<f32>,
     work: Box<[Complex<f32>]>,
     size: usize,
 }
 
-impl PrimeFactorFft32 {
-    pub fn new(size: usize) -> Self {
-        Self {
-            stages: Stages::new(size),
-            work: vec![Complex::default(); size].into_boxed_slice(),
-            size,
+impl PrimeFactor32 {
+    fn new(size: usize) -> Option<Self> {
+        if let Some(stages) = Stages::new(size) {
+            Some(Self {
+                stages,
+                work: vec![Complex::default(); size].into_boxed_slice(),
+                size,
+            })
+        } else {
+            None
         }
     }
 }
 
-impl Fft for PrimeFactorFft32 {
+impl Fft for PrimeFactor32 {
     type Float = f32;
 
     fn size(&self) -> usize {
@@ -303,5 +308,13 @@ impl Fft for PrimeFactorFft32 {
 
     fn ifft_in_place(&mut self, input: &mut [Complex<f32>]) {
         apply_stage(input, &mut self.work, &self.stages, false);
+    }
+}
+
+pub fn create_f32(size: usize) -> Option<Box<dyn Fft<Float = f32>>> {
+    if let Some(fft) = PrimeFactor32::new(size) {
+        Some(Box::new(fft))
+    } else {
+        None
     }
 }

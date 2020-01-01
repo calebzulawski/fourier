@@ -1,4 +1,3 @@
-use crate::autosort::prime_factor::PrimeFactorFft32;
 use crate::float::FftFloat;
 use crate::Fft;
 use num_complex::Complex;
@@ -66,6 +65,41 @@ impl<T: FftFloat> BluesteinsAlgorithm<T> {
     }
 }
 
+fn apply<T: FftFloat>(
+    input: &mut [Complex<T>],
+    work: &mut [Complex<T>],
+    x: &[Complex<T>],
+    w: &[Complex<T>],
+    size: usize,
+    fft: &mut Box<dyn Fft<Float = T>>,
+    forward: bool,
+) {
+    assert_eq!(input.len(), size);
+    for (w, (x, i)) in work.iter_mut().zip(x.iter().zip(input.iter())) {
+        *w = x * i;
+    }
+    for w in work[size..].iter_mut() {
+        *w = Complex::default();
+    }
+    fft.fft_in_place(work);
+    for (w, wi) in work.iter_mut().zip(w.iter()) {
+        *w *= wi;
+    }
+    fft.ifft_in_place(work);
+    if forward {
+        for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
+            *i = w * xi;
+        }
+    } else {
+        for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
+            *i = w * xi / T::from_usize(size).unwrap();
+        }
+    }
+
+    // TODO: this shouldn't be necessary...
+    input[1..].reverse();
+}
+
 impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
     type Float = T;
 
@@ -74,33 +108,32 @@ impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
     }
 
     fn fft_in_place(&mut self, input: &mut [Complex<Self::Float>]) {
-        assert_eq!(input.len(), self.size);
-        for (w, (x, i)) in self
-            .work
-            .iter_mut()
-            .zip(self.x_forward.iter().zip(input.iter()))
-        {
-            *w = x * i;
-        }
-        for w in self.work[self.size..].iter_mut() {
-            *w = Complex::default();
-        }
-        self.fft.fft_in_place(&mut self.work);
-        for (w, wi) in self.work.iter_mut().zip(self.w_forward.iter()) {
-            *w *= wi;
-        }
-        self.fft.ifft_in_place(&mut self.work);
-        for (w, xi) in self.work.iter_mut().zip(self.x_forward.iter()) {
-            *w *= xi;
-        }
-        input.copy_from_slice(&self.work[..self.size]);
+        apply(
+            input,
+            &mut self.work,
+            &self.x_forward,
+            &self.w_forward,
+            self.size,
+            &mut self.fft,
+            true,
+        );
     }
 
-    fn ifft_in_place(&mut self, input: &mut [Complex<Self::Float>]) {}
+    fn ifft_in_place(&mut self, input: &mut [Complex<Self::Float>]) {
+        apply(
+            input,
+            &mut self.work,
+            &self.x_inverse,
+            &self.w_inverse,
+            self.size,
+            &mut self.fft,
+            false,
+        );
+    }
 }
 
 pub fn create_f32(size: usize) -> Box<dyn Fft<Float = f32>> {
     Box::new(BluesteinsAlgorithm::new(size, |size| {
-        Box::new(PrimeFactorFft32::new(size))
+        crate::autosort::prime_factor::create_f32(size).unwrap()
     }))
 }

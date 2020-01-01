@@ -9,7 +9,7 @@ fn near<T: Float + FromPrimitive + std::fmt::Display>(
 ) {
     assert_eq!(actual.len(), expected.len());
     let tolerance =
-        T::epsilon() * T::from_usize(actual.len()).unwrap().log2() * T::from_usize(10).unwrap();
+        T::epsilon() * T::from_usize(actual.len()).unwrap().log2() * T::from_usize(15).unwrap();
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert!(
             (actual - expected).norm() / expected.norm() < tolerance,

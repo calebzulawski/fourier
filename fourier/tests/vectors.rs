@@ -3,16 +3,30 @@ use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 use serde::Deserialize;
 
-fn near<T: Float + FromPrimitive + std::fmt::Display>(
-    actual: &[Complex<T>],
-    expected: &[Complex<T>],
-) {
+fn near_f32(actual: &[Complex<f32>], expected: &[Complex<f32>]) {
     assert_eq!(actual.len(), expected.len());
-    let tolerance =
-        T::epsilon() * T::from_usize(actual.len()).unwrap().log2() * T::from_usize(15).unwrap();
+    let tolerance = f32::epsilon()
+        * f32::from_usize(actual.len()).unwrap().log2()
+        * f32::from_usize(15).unwrap();
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert!(
-            (actual - expected).norm() / expected.norm() < tolerance,
+            float_cmp::approx_eq!(
+                f32,
+                actual.re,
+                expected.re,
+                float_cmp::F32Margin {
+                    epsilon: tolerance,
+                    ulps: 8
+                }
+            ) && float_cmp::approx_eq!(
+                f32,
+                actual.im,
+                expected.im,
+                float_cmp::F32Margin {
+                    epsilon: tolerance,
+                    ulps: 8
+                }
+            ),
             format!("{} != {}", actual, expected)
         );
     }
@@ -29,7 +43,7 @@ macro_rules! generate_vector_test {
             let mut fft = create_fft_f32(data.x.len());
             fft.fft_in_place(&mut data.x);
             println!("{:?}\n{:?}", data.x, data.y);
-            near(&data.x, &data.y);
+            near_f32(&data.x, &data.y);
         }
     };
     {
@@ -42,7 +56,7 @@ macro_rules! generate_vector_test {
             let mut fft = create_fft_f32(data.x.len());
             fft.ifft_in_place(&mut data.y);
             println!("{:?}\n{:?}", data.x, data.y);
-            near(&data.y, &data.x);
+            near_f32(&data.y, &data.x);
         }
     }
 }

@@ -2,6 +2,7 @@
 mod vector;
 
 mod autosort;
+mod bluesteins;
 mod fft;
 mod float;
 mod twiddle;

@@ -277,6 +277,7 @@ fn apply_stage(
 pub struct PrimeFactorFft32 {
     stages: Stages<f32>,
     work: Box<[Complex<f32>]>,
+    size: usize,
 }
 
 impl PrimeFactorFft32 {
@@ -284,12 +285,17 @@ impl PrimeFactorFft32 {
         Self {
             stages: Stages::new(size),
             work: vec![Complex::default(); size].into_boxed_slice(),
+            size,
         }
     }
 }
 
 impl Fft for PrimeFactorFft32 {
     type Float = f32;
+
+    fn size(&self) -> usize {
+        self.size
+    }
 
     fn fft_in_place(&mut self, input: &mut [Complex<f32>]) {
         apply_stage(input, &mut self.work, &self.stages, true);

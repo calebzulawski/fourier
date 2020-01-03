@@ -3,9 +3,9 @@ use num::Complex;
 use rand::distributions::Standard;
 use rand::Rng;
 
-fn pow2_f32(c: &mut Criterion) {
-    let mut group = c.benchmark_group("FFT, f32, powers of 2");
-    for size in (8..12).map(|x| 2usize.pow(x)) {
+fn bench_f32(c: &mut Criterion, title: &str, sizes: &mut dyn std::iter::Iterator<Item = usize>) {
+    let mut group = c.benchmark_group(title);
+    for size in sizes {
         let input = rand::thread_rng()
             .sample_iter(&Standard)
             .zip(rand::thread_rng().sample_iter(&Standard))
@@ -14,7 +14,7 @@ fn pow2_f32(c: &mut Criterion) {
             .collect::<Vec<_>>();
 
         // Fourier
-        let mut fourier = fourier::create_fft_f32(size);
+        let fourier = fourier::create_fft_f32(size);
         group.bench_with_input(BenchmarkId::new("Fourier", size), &input, |b, i| {
             let mut input = Vec::new();
             input.extend_from_slice(i);
@@ -53,5 +53,21 @@ fn pow2_f32(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, pow2_f32);
+fn bench_f32_pow2(c: &mut Criterion) {
+    bench_f32(
+        c,
+        "FFT, f32, powers of two",
+        &mut (8..10).map(|x| 2usize.pow(x)),
+    );
+}
+
+fn bench_f32_prime(c: &mut Criterion) {
+    bench_f32(
+        c,
+        "FFT, f32, primes",
+        &mut [191, 439, 1013].iter().map(|x| *x),
+    );
+}
+
+criterion_group!(benches, bench_f32_pow2, bench_f32_prime);
 criterion_main!(benches);

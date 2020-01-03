@@ -1,6 +1,7 @@
 use crate::float::FftFloat;
 use crate::Fft;
 use num_complex::Complex;
+use std::cell::Cell;
 
 fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
     let theta = index * std::f64::consts::PI / size as f64;
@@ -18,12 +19,12 @@ struct BluesteinsAlgorithm<T> {
     w_inverse: Box<[Complex<T>]>,
     x_forward: Box<[Complex<T>]>,
     x_inverse: Box<[Complex<T>]>,
-    work: Box<[Complex<T>]>,
+    work: Cell<Box<[Complex<T>]>>,
 }
 
 impl<T: FftFloat> BluesteinsAlgorithm<T> {
     fn new<F: Fn(usize) -> Box<dyn Fft<Float = T>>>(size: usize, fft_maker: F) -> Self {
-        let mut fft = fft_maker((2 * size - 1).checked_next_power_of_two().unwrap());
+        let fft = fft_maker((2 * size - 1).checked_next_power_of_two().unwrap());
 
         // create W vector
         let mut w_forward = vec![Complex::default(); fft.size()].into_boxed_slice();
@@ -54,7 +55,7 @@ impl<T: FftFloat> BluesteinsAlgorithm<T> {
         }
 
         Self {
-            work: vec![Complex::default(); fft.size()].into_boxed_slice(),
+            work: Cell::new(vec![Complex::default(); fft.size()].into_boxed_slice()),
             fft,
             size,
             w_forward,
@@ -71,7 +72,7 @@ fn apply<T: FftFloat>(
     x: &[Complex<T>],
     w: &[Complex<T>],
     size: usize,
-    fft: &mut Box<dyn Fft<Float = T>>,
+    fft: &Box<dyn Fft<Float = T>>,
     forward: bool,
 ) {
     assert_eq!(input.len(), size);
@@ -107,28 +108,32 @@ impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
         self.size
     }
 
-    fn fft_in_place(&mut self, input: &mut [Complex<Self::Float>]) {
+    fn fft_in_place(&self, input: &mut [Complex<Self::Float>]) {
+        let mut work = self.work.take();
         apply(
             input,
-            &mut self.work,
+            &mut work,
             &self.x_forward,
             &self.w_forward,
             self.size,
-            &mut self.fft,
+            &self.fft,
             true,
         );
+        self.work.set(work);
     }
 
-    fn ifft_in_place(&mut self, input: &mut [Complex<Self::Float>]) {
+    fn ifft_in_place(&self, input: &mut [Complex<Self::Float>]) {
+        let mut work = self.work.take();
         apply(
             input,
-            &mut self.work,
+            &mut work,
             &self.x_inverse,
             &self.w_inverse,
             self.size,
-            &mut self.fft,
+            &self.fft,
             false,
         );
+        self.work.set(work);
     }
 }
 

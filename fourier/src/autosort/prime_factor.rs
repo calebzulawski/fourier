@@ -5,6 +5,7 @@ use crate::fft::Fft;
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
 use num_complex::Complex;
+use std::cell::Cell;
 
 fn num_factors(factor: usize, mut value: usize) -> (usize, usize) {
     let mut count = 0;
@@ -277,7 +278,7 @@ fn apply_stage(
 
 struct PrimeFactor32 {
     stages: Stages<f32>,
-    work: Box<[Complex<f32>]>,
+    work: Cell<Box<[Complex<f32>]>>,
     size: usize,
 }
 
@@ -286,7 +287,7 @@ impl PrimeFactor32 {
         if let Some(stages) = Stages::new(size) {
             Some(Self {
                 stages,
-                work: vec![Complex::default(); size].into_boxed_slice(),
+                work: Cell::new(vec![Complex::default(); size].into_boxed_slice()),
                 size,
             })
         } else {
@@ -302,12 +303,16 @@ impl Fft for PrimeFactor32 {
         self.size
     }
 
-    fn fft_in_place(&mut self, input: &mut [Complex<f32>]) {
-        apply_stage(input, &mut self.work, &self.stages, true);
+    fn fft_in_place(&self, input: &mut [Complex<f32>]) {
+        let mut work = self.work.take();
+        apply_stage(input, &mut work, &self.stages, true);
+        self.work.set(work);
     }
 
-    fn ifft_in_place(&mut self, input: &mut [Complex<f32>]) {
-        apply_stage(input, &mut self.work, &self.stages, false);
+    fn ifft_in_place(&self, input: &mut [Complex<f32>]) {
+        let mut work = self.work.take();
+        apply_stage(input, &mut work, &self.stages, false);
+        self.work.set(work);
     }
 }
 

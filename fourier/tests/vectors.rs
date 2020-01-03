@@ -40,7 +40,7 @@ macro_rules! generate_vector_test {
         fn $test() {
             let serialized = std::include_str!($file);
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
-            let mut fft = create_fft_f32(data.x.len());
+            let fft = create_fft_f32(data.x.len());
             fft.fft_in_place(&mut data.x);
             println!("{:?}\n{:?}", data.x, data.y);
             near_f32(&data.x, &data.y);
@@ -53,7 +53,7 @@ macro_rules! generate_vector_test {
         fn $test() {
             let serialized = std::include_str!($file);
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
-            let mut fft = create_fft_f32(data.x.len());
+            let fft = create_fft_f32(data.x.len());
             fft.ifft_in_place(&mut data.y);
             println!("{:?}\n{:?}", data.x, data.y);
             near_f32(&data.y, &data.x);

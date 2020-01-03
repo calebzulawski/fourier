@@ -1,6 +1,7 @@
 #![allow(unused_macros)]
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! generic_vector {
     {} => {
         use num_complex::Complex;

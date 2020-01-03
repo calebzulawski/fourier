@@ -1,6 +1,7 @@
 #![allow(unused_macros)]
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! avx_vector {
     {} => {
         #[cfg(target_arch = "x86")]

@@ -1,9 +1,11 @@
 #[macro_export]
+#[doc(hidden)]
 macro_rules! butterfly2 {
     { $input:tt, $forward:tt } => { [add!($input[0], $input[1]), sub!($input[0], $input[1])] };
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! butterfly3 {
     { $input:tt, $forward:tt } => {
         {
@@ -20,6 +22,7 @@ macro_rules! butterfly3 {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! butterfly4 {
     { $input:tt, $forward:tt } => {
         {
@@ -34,6 +37,7 @@ macro_rules! butterfly4 {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! butterfly8 {
     { $input:tt, $forward:tt } => {
         {

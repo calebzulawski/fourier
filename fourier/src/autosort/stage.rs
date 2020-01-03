@@ -1,4 +1,5 @@
 #[macro_export]
+#[doc(hidden)]
 macro_rules! stage {
     {
         wide, $radix:literal, $butterfly:ident, $input:ident, $output:ident, $forward: expr, $size:expr, $stride:expr, $stage_twiddles:expr

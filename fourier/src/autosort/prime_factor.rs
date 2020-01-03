@@ -297,26 +297,20 @@ impl PrimeFactor32 {
 }
 
 impl Fft for PrimeFactor32 {
-    type Float = f32;
+    type Real = f32;
 
     fn size(&self) -> usize {
         self.size
     }
 
-    fn fft_in_place(&self, input: &mut [Complex<f32>]) {
+    fn transform_in_place(&self, input: &mut [Complex<f32>], forward: bool) {
         let mut work = self.work.take();
-        apply_stage(input, &mut work, &self.stages, true);
-        self.work.set(work);
-    }
-
-    fn ifft_in_place(&self, input: &mut [Complex<f32>]) {
-        let mut work = self.work.take();
-        apply_stage(input, &mut work, &self.stages, false);
+        apply_stage(input, &mut work, &self.stages, forward);
         self.work.set(work);
     }
 }
 
-pub fn create_f32(size: usize) -> Option<Box<dyn Fft<Float = f32> + Send>> {
+pub fn create_f32(size: usize) -> Option<Box<dyn Fft<Real = f32> + Send>> {
     if let Some(fft) = PrimeFactor32::new(size) {
         Some(Box::new(fft))
     } else {

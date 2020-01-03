@@ -3,7 +3,12 @@ use num::Complex;
 use rand::distributions::Standard;
 use rand::Rng;
 
-fn bench_f32(c: &mut Criterion, title: &str, sizes: &mut dyn std::iter::Iterator<Item = usize>) {
+fn bench_f32(
+    c: &mut Criterion,
+    title: &str,
+    sizes: &mut dyn std::iter::Iterator<Item = usize>,
+    forward: bool,
+) {
     let mut group = c.benchmark_group(title);
     for size in sizes {
         let input = rand::thread_rng()
@@ -18,11 +23,11 @@ fn bench_f32(c: &mut Criterion, title: &str, sizes: &mut dyn std::iter::Iterator
         group.bench_with_input(BenchmarkId::new("Fourier", size), &input, |b, i| {
             let mut input = Vec::new();
             input.extend_from_slice(i);
-            b.iter(|| fourier.fft_in_place(input.as_mut()))
+            b.iter(|| fourier.transform(input.as_mut(), forward))
         });
 
         // RustFFT
-        let rustfft = rustfft::FFTplanner::<f32>::new(false).plan_fft(size);
+        let rustfft = rustfft::FFTplanner::<f32>::new(!forward).plan_fft(size);
         group.bench_with_input(BenchmarkId::new("RustFFT", size), &input, |b, i| {
             let mut input = Vec::new();
             input.extend_from_slice(i);
@@ -33,7 +38,11 @@ fn bench_f32(c: &mut Criterion, title: &str, sizes: &mut dyn std::iter::Iterator
         use mkl_fft::plan::C2CPlan;
         let mut mkl_fft = mkl_fft::plan::C2CPlan32::aligned(
             &[size],
-            mkl_fft::types::Sign::Forward,
+            if forward {
+                mkl_fft::types::Sign::Forward
+            } else {
+                mkl_fft::types::Sign::Inverse
+            },
             mkl_fft::types::Flag::Measure,
         )
         .unwrap();
@@ -58,6 +67,7 @@ fn bench_f32_pow2(c: &mut Criterion) {
         c,
         "FFT, f32, powers of two",
         &mut (8..10).map(|x| 2usize.pow(x)),
+        true,
     );
 }
 
@@ -66,6 +76,7 @@ fn bench_f32_prime(c: &mut Criterion) {
         c,
         "FFT, f32, primes",
         &mut [191, 439, 1013].iter().map(|x| *x),
+        true,
     );
 }
 

@@ -13,7 +13,7 @@ fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
 }
 
 struct BluesteinsAlgorithm<T> {
-    fft: Box<dyn Fft<Float = T> + Send>,
+    fft: Box<dyn Fft<Real = T> + Send>,
     size: usize,
     w_forward: Box<[Complex<T>]>,
     w_inverse: Box<[Complex<T>]>,
@@ -23,7 +23,7 @@ struct BluesteinsAlgorithm<T> {
 }
 
 impl<T: FftFloat> BluesteinsAlgorithm<T> {
-    fn new<F: Fn(usize) -> Box<dyn Fft<Float = T> + Send>>(size: usize, fft_maker: F) -> Self {
+    fn new<F: Fn(usize) -> Box<dyn Fft<Real = T> + Send>>(size: usize, fft_maker: F) -> Self {
         let fft = fft_maker((2 * size - 1).checked_next_power_of_two().unwrap());
 
         // create W vector
@@ -72,7 +72,7 @@ fn apply<T: FftFloat>(
     x: &[Complex<T>],
     w: &[Complex<T>],
     size: usize,
-    fft: &Box<dyn Fft<Float = T> + Send>,
+    fft: &Box<dyn Fft<Real = T> + Send>,
     forward: bool,
 ) {
     assert_eq!(input.len(), size);
@@ -102,42 +102,36 @@ fn apply<T: FftFloat>(
 }
 
 impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
-    type Float = T;
+    type Real = T;
 
     fn size(&self) -> usize {
         self.size
     }
 
-    fn fft_in_place(&self, input: &mut [Complex<Self::Float>]) {
+    fn transform_in_place(&self, input: &mut [Complex<Self::Real>], forward: bool) {
         let mut work = self.work.take();
         apply(
             input,
             &mut work,
-            &self.x_forward,
-            &self.w_forward,
+            if forward {
+                &self.x_forward
+            } else {
+                &self.x_inverse
+            },
+            if forward {
+                &self.w_forward
+            } else {
+                &self.w_inverse
+            },
             self.size,
             &self.fft,
-            true,
-        );
-        self.work.set(work);
-    }
-
-    fn ifft_in_place(&self, input: &mut [Complex<Self::Float>]) {
-        let mut work = self.work.take();
-        apply(
-            input,
-            &mut work,
-            &self.x_inverse,
-            &self.w_inverse,
-            self.size,
-            &self.fft,
-            false,
+            forward,
         );
         self.work.set(work);
     }
 }
 
-pub fn create_f32(size: usize) -> Box<dyn Fft<Float = f32> + Send> {
+pub fn create_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
     Box::new(BluesteinsAlgorithm::new(size, |size| {
         crate::autosort::prime_factor::create_f32(size).unwrap()
     }))

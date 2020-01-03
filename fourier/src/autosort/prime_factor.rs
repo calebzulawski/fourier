@@ -316,7 +316,7 @@ impl Fft for PrimeFactor32 {
     }
 }
 
-pub fn create_f32(size: usize) -> Option<Box<dyn Fft<Float = f32>>> {
+pub fn create_f32(size: usize) -> Option<Box<dyn Fft<Float = f32> + Send>> {
     if let Some(fft) = PrimeFactor32::new(size) {
         Some(Box::new(fft))
     } else {

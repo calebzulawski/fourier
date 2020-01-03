@@ -9,7 +9,7 @@ mod twiddle;
 
 pub use crate::fft::Fft;
 
-pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Float = f32>> {
+pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Float = f32> + Send> {
     if let Some(fft) = crate::autosort::prime_factor::create_f32(size) {
         fft
     } else {

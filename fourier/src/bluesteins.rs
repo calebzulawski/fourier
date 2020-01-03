@@ -13,7 +13,7 @@ fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
 }
 
 struct BluesteinsAlgorithm<T> {
-    fft: Box<dyn Fft<Float = T>>,
+    fft: Box<dyn Fft<Float = T> + Send>,
     size: usize,
     w_forward: Box<[Complex<T>]>,
     w_inverse: Box<[Complex<T>]>,
@@ -23,7 +23,7 @@ struct BluesteinsAlgorithm<T> {
 }
 
 impl<T: FftFloat> BluesteinsAlgorithm<T> {
-    fn new<F: Fn(usize) -> Box<dyn Fft<Float = T>>>(size: usize, fft_maker: F) -> Self {
+    fn new<F: Fn(usize) -> Box<dyn Fft<Float = T> + Send>>(size: usize, fft_maker: F) -> Self {
         let fft = fft_maker((2 * size - 1).checked_next_power_of_two().unwrap());
 
         // create W vector
@@ -72,7 +72,7 @@ fn apply<T: FftFloat>(
     x: &[Complex<T>],
     w: &[Complex<T>],
     size: usize,
-    fft: &Box<dyn Fft<Float = T>>,
+    fft: &Box<dyn Fft<Float = T> + Send>,
     forward: bool,
 ) {
     assert_eq!(input.len(), size);
@@ -137,7 +137,7 @@ impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
     }
 }
 
-pub fn create_f32(size: usize) -> Box<dyn Fft<Float = f32>> {
+pub fn create_f32(size: usize) -> Box<dyn Fft<Float = f32> + Send> {
     Box::new(BluesteinsAlgorithm::new(size, |size| {
         crate::autosort::prime_factor::create_f32(size).unwrap()
     }))

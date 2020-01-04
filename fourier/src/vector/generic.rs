@@ -4,6 +4,7 @@
 #[doc(hidden)]
 macro_rules! generic_vector {
     {} => {
+        #[allow(unused_imports)]
         use num_complex::Complex;
 
         macro_rules! width {

@@ -4,10 +4,15 @@
 #[doc(hidden)]
 macro_rules! avx_vector {
     { f32 } => {
+        #[allow(unused_imports)]
         #[cfg(target_arch = "x86")]
         use std::arch::x86::*;
+
+        #[allow(unused_imports)]
         #[cfg(target_arch = "x86_64")]
         use std::arch::x86_64::*;
+
+        #[allow(unused_imports)]
         use num_complex::Complex;
 
         macro_rules! width {
@@ -97,10 +102,15 @@ macro_rules! avx_vector {
         }
     };
     { f64 } => {
+        #[allow(unused_imports)]
         #[cfg(target_arch = "x86")]
         use std::arch::x86::*;
+
+        #[allow(unused_imports)]
         #[cfg(target_arch = "x86_64")]
         use std::arch::x86_64::*;
+
+        #[allow(unused_imports)]
         use num_complex::Complex;
 
         macro_rules! width {

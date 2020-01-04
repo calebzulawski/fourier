@@ -23,7 +23,7 @@ fn bench_f32(
         group.bench_with_input(BenchmarkId::new("Fourier", size), &input, |b, i| {
             let mut input = Vec::new();
             input.extend_from_slice(i);
-            b.iter(|| fourier.transform(input.as_mut(), forward))
+            b.iter(|| fourier.fft_in_place(input.as_mut()))
         });
 
         // RustFFT
@@ -35,26 +35,25 @@ fn bench_f32(
             b.iter(|| rustfft.process(input.as_mut(), output.as_mut()))
         });
 
-        use mkl_fft::plan::C2CPlan;
-        let mut mkl_fft = mkl_fft::plan::C2CPlan32::aligned(
+        use fftw::plan::C2CPlan;
+        let mut fftw = fftw::plan::C2CPlan32::aligned(
             &[size],
             if forward {
-                mkl_fft::types::Sign::Forward
+                fftw::types::Sign::Forward
             } else {
-                mkl_fft::types::Sign::Inverse
+                fftw::types::Sign::Backward
             },
-            mkl_fft::types::Flag::Measure,
+            fftw::types::Flag::Measure,
         )
         .unwrap();
-        group.bench_with_input(BenchmarkId::new("Intel MKL", size), &input, |b, i| {
-            let mut input = mkl_fft::array::AlignedVec::new(size);
+        group.bench_with_input(BenchmarkId::new("FFTW", size), &input, |b, i| {
+            let mut input = fftw::array::AlignedVec::new(size);
             for (i, o) in i.iter().zip(input.as_slice_mut().iter_mut()) {
-                *o = mkl_fft::types::c32::new(i.re, i.im);
+                *o = fftw::types::c32::new(i.re, i.im);
             }
-            let mut output = mkl_fft::array::AlignedVec::new(size);
+            let mut output = fftw::array::AlignedVec::new(size);
             b.iter(|| {
-                mkl_fft
-                    .c2c(input.as_slice_mut(), output.as_slice_mut())
+                fftw.c2c(input.as_slice_mut(), output.as_slice_mut())
                     .unwrap()
             })
         });

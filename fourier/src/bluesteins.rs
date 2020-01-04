@@ -136,3 +136,9 @@ pub fn create_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
         crate::autosort::prime_factor::create_f32(size).unwrap()
     }))
 }
+
+pub fn create_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
+    Box::new(BluesteinsAlgorithm::new(size, |size| {
+        crate::autosort::prime_factor::create_f64(size).unwrap()
+    }))
+}

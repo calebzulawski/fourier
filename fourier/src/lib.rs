@@ -17,3 +17,12 @@ pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
         crate::bluesteins::create_f32(size)
     }
 }
+
+/// Create an FFT over `f64` with the specified size.
+pub fn create_fft_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
+    if let Some(fft) = crate::autosort::prime_factor::create_f64(size) {
+        fft
+    } else {
+        crate::bluesteins::create_f64(size)
+    }
+}

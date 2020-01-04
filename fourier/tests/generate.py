@@ -25,3 +25,5 @@ with open("vectors/generate_tests.rs", "w") as testfile:
     for size in range(1, max_size + 1):
         testfile.write("generate_vector_test!{{@forward_f32 forward_f32_{}, \"{}.json\"}}\n".format(size, size))
         testfile.write("generate_vector_test!{{@inverse_f32 inverse_f32_{}, \"{}.json\"}}\n".format(size, size))
+        testfile.write("generate_vector_test!{{@forward_f64 forward_f64_{}, \"{}.json\"}}\n".format(size, size))
+        testfile.write("generate_vector_test!{{@inverse_f64 inverse_f64_{}, \"{}.json\"}}\n".format(size, size))

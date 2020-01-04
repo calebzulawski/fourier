@@ -126,7 +126,8 @@ macro_rules! make_radix_fns {
         @impl $type:ty, $width:ident, $radix:literal, $name:ident, $butterfly:ident
     } => {
         #[multiversion::target_clones("[x86|x86_64]+avx")]
-        pub fn $name(
+        #[inline]
+        pub(super) fn $name(
             input: &[num_complex::Complex<$type>],
             output: &mut [num_complex::Complex<$type>],
             _forward: bool,
@@ -182,25 +183,25 @@ make_radix_fns! {
 macro_rules! make_stage_fns {
     { $type:ty, $name:ident, $radix_mod:ident } => {
         #[multiversion::target_clones("[x86|x86_64]+avx")]
+        #[inline]
         fn $name(
             input: &mut [Complex<$type>],
             output: &mut [Complex<$type>],
             stages: &Stages<$type>,
             forward: bool,
         ) {
-            use $radix_mod::*;
             #[static_dispatch]
-            use radix_2_narrow;
+            use $radix_mod::radix_2_narrow;
             #[static_dispatch]
-            use radix_2_wide;
+            use $radix_mod::radix_2_wide;
             #[static_dispatch]
-            use radix_3_narrow;
+            use $radix_mod::radix_3_narrow;
             #[static_dispatch]
-            use radix_3_wide;
+            use $radix_mod::radix_3_wide;
             #[static_dispatch]
-            use radix_4_narrow;
+            use $radix_mod::radix_4_narrow;
             #[static_dispatch]
-            use radix_4_wide;
+            use $radix_mod::radix_4_wide;
 
             #[target_cfg(target = "[x86|x86_64]+avx")]
             crate::avx_vector! { $type };

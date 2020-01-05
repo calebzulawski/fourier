@@ -22,4 +22,5 @@ template <typename T> void test() {
 int main() {
   test<float>();
   test<double>();
+  return 0;
 }

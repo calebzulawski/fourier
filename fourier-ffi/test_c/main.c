@@ -13,7 +13,7 @@ void test_float() {
   fourier_destroy_float(fft);
   for (int i = 0; i < 4; i++) {
     if (cabsf(input[i] - output[i]) > 1e-10f) {
-      fprintf(stderr, "Mismatch at index %d (%f%+fi is not %f%+fi)", i,
+      fprintf(stderr, "Mismatch at index %d (%f%+fi is not %f%+fi)\n", i,
               crealf(input[i]), cimagf(input[i]), crealf(output[i]),
               cimagf(output[i]));
       exit(-1);
@@ -30,7 +30,7 @@ void test_double() {
   fourier_destroy_double(fft);
   for (int i = 0; i < 4; i++) {
     if (cabs(input[i] - output[i]) > 1e-10f) {
-      fprintf(stderr, "Mismatch at index %d (%f%+fi is not %f%+fi)", i,
+      fprintf(stderr, "Mismatch at index %d (%f%+fi is not %f%+fi)\n", i,
               creal(input[i]), cimag(input[i]), creal(output[i]),
               cimag(output[i]));
       exit(-1);
@@ -41,4 +41,5 @@ void test_double() {
 int main() {
   test_float();
   test_double();
+  return 0;
 }

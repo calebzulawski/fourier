@@ -14,9 +14,9 @@ macro_rules! stage {
                 // Load twiddle factors
                 let twiddles = {
                     let mut twiddles = [zeroed!(); $radix];
-                    for k in 0..($radix - 1) {
+                    for k in 1..$radix {
                         let twiddle = $stage_twiddles(k, i);
-                        twiddles[k + 1] = broadcast!(twiddle);
+                        twiddles[k] = broadcast!(twiddle);
                     }
                     twiddles
                 };
@@ -60,9 +60,9 @@ macro_rules! stage {
                 // Load twiddle factors
                 let twiddles = {
                     let mut twiddles = [zeroed!(); $radix];
-                    for k in 0..($radix - 1) {
+                    for k in 1..$radix {
                         let twiddle = $stage_twiddles(k, i);
-                        twiddles[k + 1] = broadcast!(twiddle);
+                        twiddles[k] = broadcast!(twiddle);
                     }
                     twiddles
                 };

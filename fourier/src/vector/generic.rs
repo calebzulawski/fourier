@@ -3,7 +3,7 @@
 #[macro_export]
 #[doc(hidden)]
 macro_rules! generic_vector {
-    {} => {
+    { $type:ty } => {
         #[allow(unused_imports)]
         use num_complex::Complex;
 
@@ -12,7 +12,7 @@ macro_rules! generic_vector {
         }
 
         macro_rules! zeroed {
-            {} => { Complex::default() }
+            {} => { Complex::<$type>::default() }
         }
 
         macro_rules! broadcast {
@@ -35,9 +35,9 @@ macro_rules! generic_vector {
             { $z:expr, $positive:expr } => {
                 {
                     if $positive {
-                        Complex::new(-$z.im, $z.re)
+                        Complex::<$type>::new(-$z.im, $z.re)
                     } else {
-                        Complex::new($z.im, -$z.re)
+                        Complex::<$type>::new($z.im, -$z.re)
                     }
                 }
             }

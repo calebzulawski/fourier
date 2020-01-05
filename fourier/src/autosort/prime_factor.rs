@@ -5,6 +5,7 @@ use crate::fft::Fft;
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
 use num_complex::Complex;
+use num_traits::One;
 use std::cell::Cell;
 
 fn num_factors(factor: usize, mut value: usize) -> (usize, usize) {
@@ -27,6 +28,8 @@ fn extend_twiddles<T: FftFloat>(
     for _ in 0..iterations {
         let m = subsize / radix;
         for i in 0..m {
+            forward_twiddles.push(Complex::one());
+            reverse_twiddles.push(Complex::one());
             for j in 1..radix {
                 forward_twiddles.push(compute_twiddle(i * j, subsize, true));
                 reverse_twiddles.push(compute_twiddle(i * j, subsize, false));
@@ -50,20 +53,6 @@ impl<T: FftFloat> Stages<T> {
         let mut forward_twiddles = Vec::new();
         let mut reverse_twiddles = Vec::new();
 
-        {
-            let (count, new_size) = num_factors(4, current_size);
-            if count > 0 {
-                stages.push((4, count));
-                extend_twiddles(
-                    &mut forward_twiddles,
-                    &mut reverse_twiddles,
-                    current_size,
-                    4,
-                    count,
-                );
-            }
-            current_size = new_size;
-        }
         {
             let (count, new_size) = num_factors(4, current_size);
             if count > 0 {
@@ -139,9 +128,9 @@ macro_rules! make_radix_fns {
             crate::avx_vector! { $type };
 
             #[target_cfg(not(target = "[x86|x86_64]+avx"))]
-            crate::generic_vector! {};
+            crate::generic_vector! { $type };
 
-            let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * ($radix - 1) + i) };
+            let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * $radix + i) };
             crate::stage!(
                 $width,
                 $radix,
@@ -207,7 +196,7 @@ macro_rules! make_stage_fns {
             crate::avx_vector! { $type };
 
             #[target_cfg(not(target = "[x86|x86_64]+avx"))]
-            crate::generic_vector! {};
+            crate::generic_vector! { $type };
 
             assert_eq!(input.len(), output.len());
             assert_eq!(stages.size, input.len());
@@ -239,7 +228,7 @@ macro_rules! make_stage_fns {
                     }
                     size /= radix;
                     stride *= radix;
-                    twiddles = &twiddles[size * (radix - 1)..];
+                    twiddles = &twiddles[size * radix..];
                     iteration += 1;
                     data_in_output = !data_in_output;
                 }
@@ -258,7 +247,7 @@ macro_rules! make_stage_fns {
                     }
                     size /= radix;
                     stride *= radix;
-                    twiddles = &twiddles[size * (radix - 1)..];
+                    twiddles = &twiddles[size * radix..];
                     data_in_output = !data_in_output;
                 }
             }

@@ -1,6 +1,6 @@
 use fourier::{create_fft_f32, create_fft_f64};
 use num_complex::Complex;
-use num_traits::{Float, FromPrimitive};
+use num_traits::Float;
 use serde::Deserialize;
 
 fn near_f32(actual: &[Complex<f32>], expected: &[Complex<f32>]) {
@@ -67,7 +67,6 @@ macro_rules! generate_vector_test {
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
             let fft = create_fft_f32(data.x.len());
             fft.fft_in_place(&mut data.x);
-            println!("{:?}\n{:?}", data.x, data.y);
             near_f32(&data.x, &data.y);
         }
     };

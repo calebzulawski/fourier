@@ -1,0 +1,20 @@
+[package]
+name = "fourier-ffi"
+version = "0.1.0"
+authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+edition = "2018"
+publish = false
+
+[lib]
+name = "fourier"
+crate_type = ["cdylib", "staticlib"]
+
+[dependencies]
+fourier = { path = "../fourier" }
+num-complex = "0.2"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

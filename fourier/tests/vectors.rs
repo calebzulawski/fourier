@@ -5,6 +5,7 @@ use serde::Deserialize;
 
 fn near_f32(actual: &[Complex<f32>], expected: &[Complex<f32>]) {
     assert_eq!(actual.len(), expected.len());
+    println!("actual: {:?}\nexpect: {:?}", actual, expected);
     let tolerance = 1e-4;
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert!(
@@ -32,6 +33,7 @@ fn near_f32(actual: &[Complex<f32>], expected: &[Complex<f32>]) {
 
 fn near_f64(actual: &[Complex<f64>], expected: &[Complex<f64>]) {
     assert_eq!(actual.len(), expected.len());
+    println!("actual: {:?}\nexpect: {:?}", actual, expected);
     let tolerance = 1e-11;
     for (actual, expected) in actual.iter().zip(expected.iter()) {
         assert!(
@@ -79,7 +81,6 @@ macro_rules! generate_vector_test {
             let mut data: Data<f32> = serde_json::from_str(serialized).unwrap();
             let fft = create_fft_f32(data.x.len());
             fft.ifft_in_place(&mut data.y);
-            println!("{:?}\n{:?}", data.x, data.y);
             near_f32(&data.y, &data.x);
         }
     };
@@ -92,7 +93,6 @@ macro_rules! generate_vector_test {
             let mut data: Data<f64> = serde_json::from_str(serialized).unwrap();
             let fft = create_fft_f64(data.x.len());
             fft.fft_in_place(&mut data.x);
-            println!("{:?}\n{:?}", data.x, data.y);
             near_f64(&data.x, &data.y);
         }
     };
@@ -105,7 +105,6 @@ macro_rules! generate_vector_test {
             let mut data: Data<f64> = serde_json::from_str(serialized).unwrap();
             let fft = create_fft_f64(data.x.len());
             fft.ifft_in_place(&mut data.y);
-            println!("{:?}\n{:?}", data.x, data.y);
             near_f64(&data.y, &data.x);
         }
     }

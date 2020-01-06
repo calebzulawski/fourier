@@ -114,6 +114,7 @@ macro_rules! make_radix_fns {
     {
         @impl $type:ty, $width:ident, $radix:literal, $name:ident, $butterfly:ident
     } => {
+
         #[multiversion::target_clones("[x86|x86_64]+avx")]
         #[inline]
         pub(super) fn $name(
@@ -129,6 +130,13 @@ macro_rules! make_radix_fns {
 
             #[target_cfg(not(target = "[x86|x86_64]+avx"))]
             crate::generic_vector! { $type };
+
+            #[target_cfg(target = "[x86|x86_64]+avx")]
+            {
+                if crate::avx_optimization!($type, $width, $radix, input, output, _forward, size, stride, twiddles) {
+                    return
+                }
+            }
 
             let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * $radix + i) };
             crate::stage!(

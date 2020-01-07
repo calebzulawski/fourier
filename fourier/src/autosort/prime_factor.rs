@@ -112,7 +112,7 @@ impl<T: FftFloat> Stages<T> {
 /// functions for each radix.
 macro_rules! make_radix_fns {
     {
-        @impl $type:ty, $width:ident, $radix:literal, $name:ident, $butterfly:ident
+        @impl $type:ty, $wide:literal, $radix:literal, $name:ident, $butterfly:ident
     } => {
 
         #[multiversion::target_clones("[x86|x86_64]+avx")]
@@ -133,23 +133,84 @@ macro_rules! make_radix_fns {
 
             #[target_cfg(target = "[x86|x86_64]+avx")]
             {
-                if crate::avx_optimization!($type, $width, $radix, input, output, _forward, size, stride, twiddles) {
+                if !$wide && crate::avx_optimization!($type, $radix, input, output, _forward, size, stride, twiddles) {
                     return
                 }
             }
 
             let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * $radix + i) };
-            crate::stage!(
-                $width,
-                $radix,
-                $butterfly,
-                input,
-                output,
-                _forward,
-                size,
-                stride,
-                get_twiddle
-            );
+
+            let m = size / $radix;
+
+            let (full_count, final_offset) = if $wide {
+                (Some(((stride - 1) / width!()) * width!()), Some(stride - width!()))
+            } else {
+                (None, None)
+            };
+
+            for i in 0..m {
+                // Load twiddle factors
+                let twiddles = {
+                    let mut twiddles = [zeroed!(); $radix];
+                    for k in 1..$radix {
+                        let twiddle = get_twiddle(k, i);
+                        twiddles[k] = broadcast!(twiddle);
+                    }
+                    twiddles
+                };
+
+                if $wide {
+                    // Loop over full vectors, with a final overlapping vector
+                    for j in (0..full_count.unwrap())
+                        .step_by(width!())
+                        .chain(std::iter::once(final_offset.unwrap()))
+                    {
+                        // Load full vectors
+                        let mut scratch = [zeroed!(); $radix];
+                        let load = unsafe { input.as_ptr().add(j + stride * i) };
+                        for k in 0..$radix {
+                            scratch[k] = unsafe { load_wide!(load.add(stride * k * m)) };
+                        }
+
+                        // Butterfly with optional twiddles
+                        scratch = $butterfly!(scratch, _forward);
+                        if size != $radix {
+                            for k in 1..$radix {
+                                scratch[k] = mul!(scratch[k], twiddles[k]);
+                            }
+                        }
+
+                        // Store full vectors
+                        let store = unsafe { output.as_mut_ptr().add(j + $radix * stride * i) };
+                        for k in 0..$radix {
+                            unsafe { store_wide!(scratch[k], store.add(stride * k)) };
+                        }
+                    }
+                } else {
+                    let load = unsafe { input.as_ptr().add(stride * i) };
+                    let store = unsafe { output.as_mut_ptr().add($radix * stride * i) };
+                    for j in 0..stride {
+                        // Load a single value
+                        let mut scratch = [zeroed!(); $radix];
+                        for k in 0..$radix {
+                            scratch[k] = unsafe { load_narrow!(load.add(stride * k * m + j)) };
+                        }
+
+                        // Butterfly with optional twiddles
+                        scratch = $butterfly!(scratch, _forward);
+                        if size != $radix {
+                            for k in 1..$radix {
+                                scratch[k] = mul!(scratch[k], twiddles[k]);
+                            }
+                        }
+
+                        // Store a single value
+                        for k in 0..$radix {
+                            unsafe { store_narrow!(scratch[k], store.add(stride * k + j)) };
+                        }
+                    }
+                }
+            }
         }
     };
     {
@@ -157,14 +218,14 @@ macro_rules! make_radix_fns {
     } => {
         mod radix_f32 {
         $(
-            make_radix_fns! { @impl f32, wide, $radix, $wide_name, $butterfly }
-            make_radix_fns! { @impl f32, narrow, $radix, $narrow_name, $butterfly }
+            make_radix_fns! { @impl f32, true, $radix, $wide_name, $butterfly }
+            make_radix_fns! { @impl f32, false, $radix, $narrow_name, $butterfly }
         )*
         }
         mod radix_f64 {
         $(
-            make_radix_fns! { @impl f64, wide, $radix, $wide_name, $butterfly }
-            make_radix_fns! { @impl f64, narrow, $radix, $narrow_name, $butterfly }
+            make_radix_fns! { @impl f64, true, $radix, $wide_name, $butterfly }
+            make_radix_fns! { @impl f64, false, $radix, $narrow_name, $butterfly }
         )*
         }
     };

@@ -95,7 +95,7 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
 #[doc(hidden)]
 macro_rules! avx_optimization {
     {
-        f32, narrow, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
+        f32, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
     } => {
         if $radix == 4 && $stride == 1 {
             unsafe {
@@ -107,13 +107,13 @@ macro_rules! avx_optimization {
         }
     };
     {
-        f64, narrow, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
+        f64, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
     } => {
         // TODO f64 AVX init
         false
     };
     {
-        $type:ty, $width:ident, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
+        $type:ty, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
     } => {
         false
     }

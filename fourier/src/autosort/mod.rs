@@ -1,6 +1,4 @@
 #[macro_use]
-mod stage;
-#[macro_use]
 mod butterfly;
 #[macro_use]
 mod avx_optimization;

@@ -1,5 +1,5 @@
 use crate::float::FftFloat;
-use crate::Fft;
+use crate::{Fft, Transform};
 use num_complex::Complex;
 use std::cell::Cell;
 
@@ -72,7 +72,7 @@ fn apply<T: FftFloat>(
     w: &[Complex<T>],
     size: usize,
     fft: &Box<dyn Fft<Real = T> + Send>,
-    forward: bool,
+    transform: Transform,
 ) {
     assert_eq!(input.len(), size);
     for (w, (x, i)) in work.iter_mut().zip(x.iter().zip(input.iter())) {
@@ -86,13 +86,23 @@ fn apply<T: FftFloat>(
         *w *= wi;
     }
     fft.ifft_in_place(work);
-    if forward {
-        for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
-            *i = w * xi;
+    match transform {
+        Transform::Fft | Transform::UnscaledIfft => {
+            for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
+                *i = w * xi;
+            }
         }
-    } else {
-        for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
-            *i = w * xi / T::from_usize(size).unwrap();
+        Transform::Ifft => {
+            let scale = T::one() / T::from_usize(size).unwrap();
+            for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
+                *i = w * xi * scale;
+            }
+        }
+        Transform::SqrtScaledFft | Transform::SqrtScaledIfft => {
+            let scale = T::one() / T::sqrt(T::from_usize(size).unwrap());
+            for (i, (w, xi)) in input.iter_mut().zip(work.iter().zip(x.iter())) {
+                *i = w * xi * scale;
+            }
         }
     }
 
@@ -107,24 +117,24 @@ impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
         self.size
     }
 
-    fn transform_in_place(&self, input: &mut [Complex<Self::Real>], forward: bool) {
+    fn transform_in_place(&self, input: &mut [Complex<Self::Real>], transform: Transform) {
         let mut work = self.work.take();
         apply(
             input,
             &mut work,
-            if forward {
+            if transform.is_forward() {
                 &self.x_forward
             } else {
                 &self.x_inverse
             },
-            if forward {
+            if transform.is_forward() {
                 &self.w_forward
             } else {
                 &self.w_inverse
             },
             self.size,
             &self.fft,
-            forward,
+            transform,
         );
         self.work.set(work);
     }

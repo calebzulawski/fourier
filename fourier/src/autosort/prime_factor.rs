@@ -1,7 +1,7 @@
 #![allow(unused_unsafe)]
 #![allow(unused_macros)]
 
-use crate::fft::Fft;
+use crate::fft::{Fft, Transform};
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
 use num_complex::Complex;
@@ -246,7 +246,7 @@ macro_rules! make_stage_fns {
             input: &mut [Complex<$type>],
             output: &mut [Complex<$type>],
             stages: &Stages<$type>,
-            forward: bool,
+            transform: Transform,
         ) {
             #[static_dispatch]
             use $radix_mod::radix_2_narrow;
@@ -272,7 +272,7 @@ macro_rules! make_stage_fns {
 
             let mut size = stages.size;
             let mut stride = 1;
-            let mut twiddles: &[Complex<$type>] = if forward {
+            let mut twiddles: &[Complex<$type>] = if transform.is_forward() {
                 &stages.forward_twiddles
             } else {
                 &stages.reverse_twiddles
@@ -290,9 +290,9 @@ macro_rules! make_stage_fns {
                         (input, output)
                     };
                     match radix {
-                        4 => radix_4_narrow(from, to, forward, size, stride, twiddles),
-                        3 => radix_3_narrow(from, to, forward, size, stride, twiddles),
-                        2 => radix_2_narrow(from, to, forward, size, stride, twiddles),
+                        4 => radix_4_narrow(from, to, transform.is_forward(), size, stride, twiddles),
+                        3 => radix_3_narrow(from, to, transform.is_forward(), size, stride, twiddles),
+                        2 => radix_2_narrow(from, to, transform.is_forward(), size, stride, twiddles),
                         _ => unimplemented!("unsupported radix"),
                     }
                     size /= radix;
@@ -309,9 +309,9 @@ macro_rules! make_stage_fns {
                         (input, output)
                     };
                     match radix {
-                        4 => radix_4_wide(from, to, forward, size, stride, twiddles),
-                        3 => radix_3_wide(from, to, forward, size, stride, twiddles),
-                        2 => radix_2_wide(from, to, forward, size, stride, twiddles),
+                        4 => radix_4_wide(from, to, transform.is_forward(), size, stride, twiddles),
+                        3 => radix_3_wide(from, to, transform.is_forward(), size, stride, twiddles),
+                        2 => radix_2_wide(from, to, transform.is_forward(), size, stride, twiddles),
                         _ => unimplemented!("unsupported radix"),
                     }
                     size /= radix;
@@ -320,20 +320,23 @@ macro_rules! make_stage_fns {
                     data_in_output = !data_in_output;
                 }
             }
-            if forward {
-                if data_in_output {
-                    input.copy_from_slice(output);
-                }
-            } else {
-                let scale = stages.size as $type;
+            if let Some(scale) = match transform {
+                Transform::Fft | Transform::UnscaledIfft => None,
+                Transform::Ifft => Some(1. / (stages.size as $type)),
+                Transform::SqrtScaledFft | Transform::SqrtScaledIfft => Some(1. / (stages.size as $type).sqrt()),
+            } {
                 if data_in_output {
                     for (x, y) in output.iter().zip(input.iter_mut()) {
-                        *y = x / scale;
+                        *y = x * scale;
                     }
                 } else {
                     for x in input.iter_mut() {
-                        *x /= scale;
+                        *x *= scale;
                     }
+                }
+            } else {
+                if data_in_output {
+                    input.copy_from_slice(output);
                 }
             }
         }
@@ -369,9 +372,9 @@ impl Fft for PrimeFactor32 {
         self.size
     }
 
-    fn transform_in_place(&self, input: &mut [Complex<f32>], forward: bool) {
+    fn transform_in_place(&self, input: &mut [Complex<f32>], transform: Transform) {
         let mut work = self.work.take();
-        apply_stages_f32(input, &mut work, &self.stages, forward);
+        apply_stages_f32(input, &mut work, &self.stages, transform);
         self.work.set(work);
     }
 }
@@ -411,9 +414,9 @@ impl Fft for PrimeFactor64 {
         self.size
     }
 
-    fn transform_in_place(&self, input: &mut [Complex<f64>], forward: bool) {
+    fn transform_in_place(&self, input: &mut [Complex<f64>], transform: Transform) {
         let mut work = self.work.take();
-        apply_stages_f64(input, &mut work, &self.stages, forward);
+        apply_stages_f64(input, &mut work, &self.stages, transform);
         self.work.set(work);
     }
 }

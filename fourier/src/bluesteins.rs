@@ -5,11 +5,10 @@ use std::cell::Cell;
 
 fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
     let theta = index * std::f64::consts::PI / size as f64;
-    let twiddle = Complex::new(
+    Complex::new(
         T::from_f64(theta.cos()).unwrap(),
         T::from_f64(-theta.sin()).unwrap(),
-    );
-    twiddle
+    )
 }
 
 struct BluesteinsAlgorithm<T> {
@@ -33,7 +32,7 @@ impl<T: FftFloat> BluesteinsAlgorithm<T> {
             if let Some(index) = {
                 if i < size {
                     Some((i as f64).powi(2))
-                } else if i >= fft.size() - size + 1 {
+                } else if i > fft.size() - size {
                     Some(((i as f64) - (fft.size() as f64)).powi(2))
                 } else {
                     None

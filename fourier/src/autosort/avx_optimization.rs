@@ -21,10 +21,10 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
             input.as_ptr().add(3 * m + i).read().re,
             input.as_ptr().add(2 * m + i).read().im,
             input.as_ptr().add(2 * m + i).read().re,
-            input.as_ptr().add(1 * m + i).read().im,
-            input.as_ptr().add(1 * m + i).read().re,
-            input.as_ptr().add(0 * m + i).read().im,
-            input.as_ptr().add(0 * m + i).read().re,
+            input.as_ptr().add(m + i).read().im,
+            input.as_ptr().add(m + i).read().re,
+            input.as_ptr().add(i).read().im,
+            input.as_ptr().add(i).read().re,
         );
 
         // first radix 2
@@ -49,14 +49,14 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
         let a_swapped = _mm256_blend_ps(
             a_jumbled,
             _mm256_permute_ps(a_jumbled, 0b01_00_11_10),
-            0b01010000,
+            0b0101_0000,
         );
 
         let a_negated = _mm256_sub_ps(_mm256_setzero_ps(), a_swapped);
         let a_rotated = if forward {
-            _mm256_blend_ps(a_swapped, a_negated, 0b00010000) // negate new ar3
+            _mm256_blend_ps(a_swapped, a_negated, 0b0001_0000) // negate new ar3
         } else {
-            _mm256_blend_ps(a_swapped, a_negated, 0b01000000) // negate new ai3
+            _mm256_blend_ps(a_swapped, a_negated, 0b0100_0000) // negate new ai3
         };
 
         // second radix 2
@@ -82,7 +82,7 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
             let temp = _mm256_permute_ps(b_jumbled, 0b10_00_10_00);
             _mm256_permute2f128_ps(temp, temp, 0x01)
         }; // br3 bi3 br3 bi3 br1 bi1 br1 bi1
-        let mut out = _mm256_blend_ps(out_lo, out_hi, 0b00111100); // br0 bi0 br3 bi3 br1 bi1 br2 bi2
+        let mut out = _mm256_blend_ps(out_lo, out_hi, 0b0011_1100); // br0 bi0 br3 bi3 br1 bi1 br2 bi2
         if size != RADIX {
             let twiddles = _mm256_loadu_ps(twiddles.as_ptr().add(RADIX * i) as *const _);
             out = mul!(out, twiddles);

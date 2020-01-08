@@ -9,7 +9,3 @@ clap = "2.33"
 fourier = { path = "../fourier" }
 rand = "0.7"
 num-complex = "0.2"
-
-[profile.release]
-debug = true
-panic = "abort"

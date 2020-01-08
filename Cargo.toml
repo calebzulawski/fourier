@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "fourier",
+    "fourier-bench",
+    "fourier-ffi",
+    "fourier-prof",
+]

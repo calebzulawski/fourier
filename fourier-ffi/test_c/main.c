@@ -8,8 +8,8 @@ void test_float() {
   float complex input[4] = {1, 0, 0, 0};
   float complex output[4];
   struct fourier_fft_float *fft = fourier_create_float(4);
-  fourier_transform_float(fft, input, output, true);
-  fourier_transform_in_place_float(fft, output, false);
+  fourier_transform_float(fft, input, output, FOURIER_TRANSFORM_FFT);
+  fourier_transform_in_place_float(fft, output, FOURIER_TRANSFORM_IFFT);
   fourier_destroy_float(fft);
   for (int i = 0; i < 4; i++) {
     if (cabsf(input[i] - output[i]) > 1e-10f) {
@@ -25,8 +25,8 @@ void test_double() {
   double complex input[4] = {1, 0, 0, 0};
   double complex output[4];
   struct fourier_fft_double *fft = fourier_create_double(4);
-  fourier_transform_double(fft, input, output, true);
-  fourier_transform_in_place_double(fft, output, false);
+  fourier_transform_double(fft, input, output, FOURIER_TRANSFORM_FFT);
+  fourier_transform_in_place_double(fft, output, FOURIER_TRANSFORM_IFFT);
   fourier_destroy_double(fft);
   for (int i = 0; i < 4; i++) {
     if (cabs(input[i] - output[i]) > 1e-10f) {

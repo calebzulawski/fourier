@@ -39,6 +39,38 @@ fn extend_twiddles<T: FftFloat>(
     }
 }
 
+/// Adds a stage with radix equal to the vector width, if possible
+fn initial_stage<T: FftFloat>(
+    size: usize,
+    stages: &mut Vec<(usize, usize)>,
+    forward_twiddles: &mut Vec<Complex<T>>,
+    reverse_twiddles: &mut Vec<Complex<T>>,
+) -> usize {
+    if size % 4 == 0 {
+        stages.push((4, 1));
+        extend_twiddles(forward_twiddles, reverse_twiddles, size, 4, 1);
+        size / 4
+    } else {
+        size
+    }
+}
+
+/// Adds as many stages as possible with the provided radix
+fn latter_stages<T: FftFloat>(
+    radix: usize,
+    size: usize,
+    stages: &mut Vec<(usize, usize)>,
+    forward_twiddles: &mut Vec<Complex<T>>,
+    reverse_twiddles: &mut Vec<Complex<T>>,
+) -> usize {
+    let (count, new_size) = num_factors(radix, size);
+    if count > 0 {
+        stages.push((radix, count));
+        extend_twiddles(forward_twiddles, reverse_twiddles, size, radix, count);
+    }
+    new_size
+}
+
 struct Stages<T> {
     size: usize,
     stages: Vec<(usize, usize)>,
@@ -53,48 +85,40 @@ impl<T: FftFloat> Stages<T> {
         let mut forward_twiddles = Vec::new();
         let mut reverse_twiddles = Vec::new();
 
-        {
-            let (count, new_size) = num_factors(4, current_size);
-            if count > 0 {
-                stages.push((4, count));
-                extend_twiddles(
-                    &mut forward_twiddles,
-                    &mut reverse_twiddles,
-                    current_size,
-                    4,
-                    count,
-                );
-            }
-            current_size = new_size;
-        }
-        {
-            let (count, new_size) = num_factors(3, current_size);
-            if count > 0 {
-                stages.push((3, count));
-                extend_twiddles(
-                    &mut forward_twiddles,
-                    &mut reverse_twiddles,
-                    current_size,
-                    3,
-                    count,
-                );
-            }
-            current_size = new_size;
-        }
-        {
-            let (count, new_size) = num_factors(2, current_size);
-            if count > 0 {
-                stages.push((2, count));
-                extend_twiddles(
-                    &mut forward_twiddles,
-                    &mut reverse_twiddles,
-                    current_size,
-                    2,
-                    count,
-                );
-            }
-            current_size = new_size;
-        }
+        current_size = initial_stage(
+            current_size,
+            &mut stages,
+            &mut forward_twiddles,
+            &mut reverse_twiddles,
+        );
+        current_size = latter_stages(
+            8,
+            current_size,
+            &mut stages,
+            &mut forward_twiddles,
+            &mut reverse_twiddles,
+        );
+        current_size = latter_stages(
+            4,
+            current_size,
+            &mut stages,
+            &mut forward_twiddles,
+            &mut reverse_twiddles,
+        );
+        current_size = latter_stages(
+            3,
+            current_size,
+            &mut stages,
+            &mut forward_twiddles,
+            &mut reverse_twiddles,
+        );
+        current_size = latter_stages(
+            2,
+            current_size,
+            &mut stages,
+            &mut forward_twiddles,
+            &mut reverse_twiddles,
+        );
         if current_size != 1 {
             None
         } else {
@@ -173,7 +197,7 @@ macro_rules! make_radix_fns {
                         }
 
                         // Butterfly with optional twiddles
-                        scratch = $butterfly!(scratch, _forward);
+                        scratch = $butterfly!($type, scratch, _forward);
                         if size != $radix {
                             for k in 1..$radix {
                                 scratch[k] = mul!(scratch[k], twiddles[k]);
@@ -197,7 +221,7 @@ macro_rules! make_radix_fns {
                         }
 
                         // Butterfly with optional twiddles
-                        scratch = $butterfly!(scratch, _forward);
+                        scratch = $butterfly!($type, scratch, _forward);
                         if size != $radix {
                             for k in 1..$radix {
                                 scratch[k] = mul!(scratch[k], twiddles[k]);
@@ -234,7 +258,8 @@ macro_rules! make_radix_fns {
 make_radix_fns! {
     [2, radix_2_wide, radix_2_narrow, butterfly2],
     [3, radix_3_wide, radix_3_narrow, butterfly3],
-    [4, radix_4_wide, radix_4_narrow, butterfly4]
+    [4, radix_4_wide, radix_4_narrow, butterfly4],
+    [8, radix_8_wide, radix_8_narrow, butterfly8]
 }
 
 /// This macro creates the stage application function.
@@ -260,6 +285,10 @@ macro_rules! make_stage_fns {
             use $radix_mod::radix_4_narrow;
             #[static_dispatch]
             use $radix_mod::radix_4_wide;
+            #[static_dispatch]
+            use $radix_mod::radix_8_narrow;
+            #[static_dispatch]
+            use $radix_mod::radix_8_wide;
 
             #[target_cfg(target = "[x86|x86_64]+avx")]
             crate::avx_vector! { $type };
@@ -290,6 +319,7 @@ macro_rules! make_stage_fns {
                         (input, output)
                     };
                     match radix {
+                        8 => radix_8_narrow(from, to, transform.is_forward(), size, stride, twiddles),
                         4 => radix_4_narrow(from, to, transform.is_forward(), size, stride, twiddles),
                         3 => radix_3_narrow(from, to, transform.is_forward(), size, stride, twiddles),
                         2 => radix_2_narrow(from, to, transform.is_forward(), size, stride, twiddles),
@@ -309,6 +339,7 @@ macro_rules! make_stage_fns {
                         (input, output)
                     };
                     match radix {
+                        8 => radix_8_wide(from, to, transform.is_forward(), size, stride, twiddles),
                         4 => radix_4_wide(from, to, transform.is_forward(), size, stride, twiddles),
                         3 => radix_3_wide(from, to, transform.is_forward(), size, stride, twiddles),
                         2 => radix_2_wide(from, to, transform.is_forward(), size, stride, twiddles),

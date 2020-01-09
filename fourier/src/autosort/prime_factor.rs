@@ -8,47 +8,64 @@ use num_complex::Complex;
 use num_traits::One;
 use std::cell::Cell;
 
-fn num_factors(factor: usize, mut value: usize) -> (usize, usize) {
+fn num_factors(factor: usize, mut value: usize) -> usize {
     let mut count = 0;
     while value % factor == 0 {
         value /= factor;
         count += 1;
     }
-    (count, value)
+    count
 }
 
-fn extend_twiddles<T: FftFloat>(
-    forward_twiddles: &mut Vec<Complex<T>>,
-    reverse_twiddles: &mut Vec<Complex<T>>,
-    size: usize,
-    radix: usize,
-    iterations: usize,
-) {
-    let mut subsize = size;
-    for _ in 0..iterations {
-        let m = subsize / radix;
-        for i in 0..m {
-            forward_twiddles.push(Complex::one());
-            reverse_twiddles.push(Complex::one());
-            for j in 1..radix {
-                forward_twiddles.push(compute_twiddle(i * j, subsize, true));
-                reverse_twiddles.push(compute_twiddle(i * j, subsize, false));
+#[multiversion::target_clones("[x86|x86_64]+avx")]
+fn make_twiddles<T: FftFloat>(
+    mut size: usize,
+    stages: &Vec<(usize, usize)>,
+) -> (Vec<Complex<T>>, Vec<Complex<T>>) {
+    let mut forward_twiddles = Vec::new();
+    let mut reverse_twiddles = Vec::new();
+    let mut stride = 1;
+    for (radix, count) in stages {
+        for _ in 0..*count {
+            let m = size / *radix;
+            for i in 0..m {
+                #[target_cfg(target = "[x86|x86_64]+avx")]
+                let vector_width = 32 / std::mem::size_of::<Complex<T>>();
+                #[target_cfg(not(target = "[x86|x86_64]+avx"))]
+                let vector_width = 1;
+
+                let width = {
+                    if stride < vector_width {
+                        1
+                    } else {
+                        vector_width
+                    }
+                };
+
+                for _ in 0..width {
+                    forward_twiddles.push(Complex::one());
+                    reverse_twiddles.push(Complex::one());
+                }
+                for j in 1..*radix {
+                    let forward = compute_twiddle(i * j, size, true);
+                    let reverse = compute_twiddle(i * j, size, false);
+                    for _ in 0..width {
+                        forward_twiddles.push(forward);
+                        reverse_twiddles.push(reverse);
+                    }
+                }
             }
+            size /= *radix;
+            stride *= *radix;
         }
-        subsize /= radix;
     }
+    (forward_twiddles, reverse_twiddles)
 }
 
 /// Adds a stage with radix equal to the vector width, if possible
-fn initial_stage<T: FftFloat>(
-    size: usize,
-    stages: &mut Vec<(usize, usize)>,
-    forward_twiddles: &mut Vec<Complex<T>>,
-    reverse_twiddles: &mut Vec<Complex<T>>,
-) -> usize {
+fn initial_stage(size: usize, stages: &mut Vec<(usize, usize)>) -> usize {
     if size % 4 == 0 {
         stages.push((4, 1));
-        extend_twiddles(forward_twiddles, reverse_twiddles, size, 4, 1);
         size / 4
     } else {
         size
@@ -56,19 +73,12 @@ fn initial_stage<T: FftFloat>(
 }
 
 /// Adds as many stages as possible with the provided radix
-fn latter_stages<T: FftFloat>(
-    radix: usize,
-    size: usize,
-    stages: &mut Vec<(usize, usize)>,
-    forward_twiddles: &mut Vec<Complex<T>>,
-    reverse_twiddles: &mut Vec<Complex<T>>,
-) -> usize {
-    let (count, new_size) = num_factors(radix, size);
+fn latter_stages(radix: usize, size: usize, stages: &mut Vec<(usize, usize)>) -> usize {
+    let count = num_factors(radix, size);
     if count > 0 {
         stages.push((radix, count));
-        extend_twiddles(forward_twiddles, reverse_twiddles, size, radix, count);
     }
-    new_size
+    size / (radix.pow(count as u32))
 }
 
 struct Stages<T> {
@@ -80,48 +90,16 @@ struct Stages<T> {
 
 impl<T: FftFloat> Stages<T> {
     fn new(size: usize) -> Option<Self> {
-        let mut current_size = size;
         let mut stages = Vec::new();
-        let mut forward_twiddles = Vec::new();
-        let mut reverse_twiddles = Vec::new();
-
-        current_size = initial_stage(
-            current_size,
-            &mut stages,
-            &mut forward_twiddles,
-            &mut reverse_twiddles,
-        );
-        current_size = latter_stages(
-            8,
-            current_size,
-            &mut stages,
-            &mut forward_twiddles,
-            &mut reverse_twiddles,
-        );
-        current_size = latter_stages(
-            4,
-            current_size,
-            &mut stages,
-            &mut forward_twiddles,
-            &mut reverse_twiddles,
-        );
-        current_size = latter_stages(
-            3,
-            current_size,
-            &mut stages,
-            &mut forward_twiddles,
-            &mut reverse_twiddles,
-        );
-        current_size = latter_stages(
-            2,
-            current_size,
-            &mut stages,
-            &mut forward_twiddles,
-            &mut reverse_twiddles,
-        );
+        let current_size = initial_stage(size, &mut stages);
+        let current_size = latter_stages(8, current_size, &mut stages);
+        let current_size = latter_stages(4, current_size, &mut stages);
+        let current_size = latter_stages(3, current_size, &mut stages);
+        let current_size = latter_stages(2, current_size, &mut stages);
         if current_size != 1 {
             None
         } else {
+            let (forward_twiddles, reverse_twiddles) = make_twiddles(size, &stages);
             Some(Self {
                 size,
                 stages,
@@ -147,7 +125,7 @@ macro_rules! make_radix_fns {
             _forward: bool,
             size: usize,
             stride: usize,
-            twiddles: &[num_complex::Complex<$type>],
+            cached_twiddles: &[num_complex::Complex<$type>],
         ) {
             #[target_cfg(target = "[x86|x86_64]+avx")]
             crate::avx_vector! { $type };
@@ -157,12 +135,10 @@ macro_rules! make_radix_fns {
 
             #[target_cfg(target = "[x86|x86_64]+avx")]
             {
-                if !$wide && crate::avx_optimization!($type, $radix, input, output, _forward, size, stride, twiddles) {
+                if !$wide && crate::avx_optimization!($type, $radix, input, output, _forward, size, stride, cached_twiddles) {
                     return
                 }
             }
-
-            let get_twiddle = |i, j| unsafe { *twiddles.get_unchecked(j * $radix + i) };
 
             let m = size / $radix;
 
@@ -174,16 +150,17 @@ macro_rules! make_radix_fns {
 
             for i in 0..m {
                 // Load twiddle factors
-                let twiddles = {
-                    let mut twiddles = [zeroed!(); $radix];
-                    for k in 1..$radix {
-                        let twiddle = get_twiddle(k, i);
-                        twiddles[k] = broadcast!(twiddle);
-                    }
-                    twiddles
-                };
-
                 if $wide {
+                    let twiddles = {
+                        let mut twiddles = [zeroed!(); $radix];
+                        for k in 1..$radix {
+                            twiddles[k] = unsafe {
+                                load_wide!(cached_twiddles.as_ptr().add((i * $radix + k) * width!()))
+                            };
+                        }
+                        twiddles
+                    };
+
                     // Loop over full vectors, with a final overlapping vector
                     for j in (0..full_count.unwrap())
                         .step_by(width!())
@@ -211,6 +188,16 @@ macro_rules! make_radix_fns {
                         }
                     }
                 } else {
+                    let twiddles = {
+                        let mut twiddles = [zeroed!(); $radix];
+                        for k in 1..$radix {
+                            twiddles[k] = unsafe {
+                                load_narrow!(cached_twiddles.as_ptr().add(i * $radix + k))
+                            };
+                        }
+                        twiddles
+                    };
+
                     let load = unsafe { input.as_ptr().add(stride * i) };
                     let store = unsafe { output.as_mut_ptr().add($radix * stride * i) };
                     for j in 0..stride {
@@ -347,7 +334,7 @@ macro_rules! make_stage_fns {
                     }
                     size /= radix;
                     stride *= radix;
-                    twiddles = &twiddles[size * radix..];
+                    twiddles = &twiddles[size * radix * width!()..];
                     data_in_output = !data_in_output;
                 }
             }

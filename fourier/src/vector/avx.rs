@@ -177,24 +177,17 @@ macro_rules! avx_vector {
 
         macro_rules! load_narrow {
             { $from:expr } => {
-                _mm256_set_pd(
-                    0.0,
-                    0.0,
-                    $from.read().im,
-                    $from.read().re,
-                )
+                _mm256_insertf128_pd(
+                    _mm256_setzero_pd(),
+                    _mm_loadu_pd($from as *const f64),
+                    0,
+                );
             }
         }
 
         macro_rules! store_narrow {
             { $z:expr, $to:expr } => {
-                {
-                    let lower = _mm256_extractf128_pd($z, 0);
-                    $to.write(Complex::new(
-                        _mm_cvtsd_f64(lower),
-                        _mm_cvtsd_f64(_mm_permute_pd(lower, 1))
-                    ));
-                }
+                _mm_storeu_pd($to as *mut f64, _mm256_extractf128_pd($z, 0));
             }
         }
     }

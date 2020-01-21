@@ -14,7 +14,8 @@ include = [
     "/LICENSE-MIT",
     "/README.md",
     "/src/**",
-    "/tests/**",
+    "/tests/**/*.rs",
+    "/tests/**/*.json",
 ]
 
 [dependencies]

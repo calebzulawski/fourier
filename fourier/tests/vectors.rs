@@ -1,3 +1,4 @@
+use fourier::Fft;
 use fourier::{create_fft_f32, create_fft_f64};
 use num_complex::Complex;
 use num_traits::Float;

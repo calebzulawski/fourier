@@ -1,3 +1,4 @@
+use crate::float;
 use num_complex::Complex;
 
 /// Specifies a type of transform to perform.
@@ -78,5 +79,33 @@ pub trait Fft {
     /// Apply an IFFT out-of-place.
     fn ifft(&self, input: &[Complex<Self::Real>], output: &mut [Complex<Self::Real>]) {
         self.transform(input, output, Transform::Ifft);
+    }
+}
+
+pub(crate) enum Either<F1, F2> {
+    Left(F1),
+    Right(F2),
+}
+
+impl<F1, F2, R> Fft for Either<F1, F2>
+where
+    F1: Fft<Real = R>,
+    F2: Fft<Real = R>,
+    R: float::FftFloat,
+{
+    type Real = R;
+
+    fn size(&self) -> usize {
+        match *self {
+            Either::Left(ref f1) => f1.size(),
+            Either::Right(ref f2) => f2.size(),
+        }
+    }
+
+    fn transform_in_place(&self, input: &mut [Complex<Self::Real>], transform: Transform) {
+        match *self {
+            Either::Left(ref f1) => f1.transform_in_place(input, transform),
+            Either::Right(ref f2) => f2.transform_in_place(input, transform),
+        }
     }
 }

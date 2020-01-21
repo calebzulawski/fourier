@@ -11,8 +11,12 @@ fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
     )
 }
 
-struct BluesteinsAlgorithm<T> {
-    fft: Box<dyn Fft<Real = T> + Send>,
+struct BluesteinsAlgorithm<F, T>
+where
+    F: Fft<Real = T> + Send,
+    T: FftFloat,
+{
+    fft: F,
     size: usize,
     w_forward: Box<[Complex<T>]>,
     w_inverse: Box<[Complex<T>]>,
@@ -21,8 +25,15 @@ struct BluesteinsAlgorithm<T> {
     work: Cell<Box<[Complex<T>]>>,
 }
 
-impl<T: FftFloat> BluesteinsAlgorithm<T> {
-    fn new<F: Fn(usize) -> Box<dyn Fft<Real = T> + Send>>(size: usize, fft_maker: F) -> Self {
+impl<F, T> BluesteinsAlgorithm<F, T>
+where
+    F: Fft<Real = T> + Send,
+    T: FftFloat,
+{
+    fn new<M>(size: usize, fft_maker: M) -> Self
+    where
+        M: Fn(usize) -> F,
+    {
         let fft = fft_maker((2 * size - 1).checked_next_power_of_two().unwrap());
 
         // create W vector
@@ -71,7 +82,7 @@ fn apply<T: FftFloat>(
     x: &[Complex<T>],
     w: &[Complex<T>],
     size: usize,
-    fft: &Box<dyn Fft<Real = T> + Send>,
+    fft: &(dyn Fft<Real = T> + Send),
     transform: Transform,
 ) {
     assert_eq!(input.len(), size);
@@ -110,7 +121,11 @@ fn apply<T: FftFloat>(
     input[1..].reverse();
 }
 
-impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
+impl<F, T> Fft for BluesteinsAlgorithm<F, T>
+where
+    F: Fft<Real = T> + Send,
+    T: FftFloat,
+{
     type Real = T;
 
     fn size(&self) -> usize {
@@ -140,14 +155,14 @@ impl<T: FftFloat> Fft for BluesteinsAlgorithm<T> {
     }
 }
 
-pub fn create_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
-    Box::new(BluesteinsAlgorithm::new(size, |size| {
+pub fn create_f32(size: usize) -> impl Fft<Real = f32> + Send {
+    BluesteinsAlgorithm::new(size, |size| {
         crate::autosort::prime_factor::create_f32(size).unwrap()
-    }))
+    })
 }
 
-pub fn create_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
-    Box::new(BluesteinsAlgorithm::new(size, |size| {
+pub fn create_f64(size: usize) -> impl Fft<Real = f64> + Send {
+    BluesteinsAlgorithm::new(size, |size| {
         crate::autosort::prime_factor::create_f64(size).unwrap()
-    }))
+    })
 }

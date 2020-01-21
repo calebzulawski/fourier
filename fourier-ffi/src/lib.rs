@@ -12,22 +12,18 @@ fn convert_transform(code: c_int) -> fourier::Transform {
 }
 
 #[no_mangle]
-pub extern "C" fn fourier_create_float(
-    size: usize,
-) -> *const Box<dyn fourier::Fft<Real = f32> + Send> {
+pub extern "C" fn fourier_create_float(size: usize) -> *mut (dyn fourier::Fft<Real = f32> + Send) {
     Box::into_raw(Box::new(fourier::create_fft_f32(size)))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn fourier_destroy_float(
-    state: *mut Box<dyn fourier::Fft<Real = f32> + Send>,
-) {
+pub unsafe extern "C" fn fourier_destroy_float(state: *mut (dyn fourier::Fft<Real = f32> + Send)) {
     Box::from_raw(state);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn fourier_transform_in_place_float(
-    state: *const Box<dyn fourier::Fft<Real = f32> + Send>,
+    state: *const (dyn fourier::Fft<Real = f32> + Send),
     input: *mut num_complex::Complex<f32>,
     transform: c_int,
 ) {
@@ -54,14 +50,12 @@ pub unsafe extern "C" fn fourier_transform_float(
 #[no_mangle]
 pub extern "C" fn fourier_create_double(
     size: size_t,
-) -> *const Box<dyn fourier::Fft<Real = f64> + Send> {
+) -> *mut (dyn fourier::Fft<Real = f64> + Send) {
     Box::into_raw(Box::new(fourier::create_fft_f64(size)))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn fourier_destroy_double(
-    state: *mut Box<dyn fourier::Fft<Real = f64> + Send>,
-) {
+pub unsafe extern "C" fn fourier_destroy_double(state: *mut (dyn fourier::Fft<Real = f64> + Send)) {
     Box::from_raw(state);
 }
 

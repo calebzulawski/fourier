@@ -93,6 +93,7 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
 
 #[multiversion::target("[x86|x86_64]+avx")]
 #[inline]
+#[allow(dead_code)]
 pub(crate) unsafe fn radix_4_stride_1_avx_f64(
     input: &[num_complex::Complex<f64>],
     output: &mut [num_complex::Complex<f64>],

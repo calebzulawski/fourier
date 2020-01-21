@@ -1,6 +1,6 @@
 Fourier
 =======
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/calebzulawski/fourier/ci)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/calebzulawski/fourier/CI)
 [![License](https://img.shields.io/crates/l/fourier)](https://crates.io/crates/fourier)
 [![Crates.io](https://img.shields.io/crates/v/fourier)](https://crates.io/crates/fourier)
 [![Rust Documentation](https://img.shields.io/badge/api-rustdoc-blue.svg)](https://docs.rs/fourier/0.1.0/fourier/)

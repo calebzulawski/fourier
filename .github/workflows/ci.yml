@@ -6,9 +6,21 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        version:
+          - 1.38.0
+          - stable
+          - beta
+          - nightly
     steps:
     - uses: actions/checkout@v1
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.version }}
+        default: true
+        profile: minimal 
     - name: Build
       run: cargo build --verbose
     - name: Run tests

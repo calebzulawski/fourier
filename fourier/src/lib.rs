@@ -2,7 +2,7 @@
 //!
 //! # Implementation
 //! For FFTs with sizes that are multiples of 2 and 3, the Stockham auto-sort algorithm is used.
-//! For any other sizes, such as large primes, Bluestein's algorithm is used.
+//! For any other sizes, Bluestein's algorithm is used.
 
 #[macro_use]
 mod vector;

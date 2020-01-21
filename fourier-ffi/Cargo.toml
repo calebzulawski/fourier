@@ -8,6 +8,7 @@ publish = false
 [lib]
 name = "fourier"
 crate_type = ["cdylib", "staticlib"]
+doc = false
 
 [dependencies]
 fourier = { path = "../fourier" }

@@ -2,6 +2,11 @@
 name = "fourier"
 version = "0.1.0"
 authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Fast Fourier transforms (FFTs)"
+repository = "https://github.com/calebzulawski/fourier"
+categories = ["algorithms", "mathematics", "multimedia::audio", "science"]
+readme = "README.md"
 edition = "2018"
 
 [dependencies]

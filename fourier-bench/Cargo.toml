@@ -3,6 +3,7 @@ name = "fourier-bench"
 version = "0.1.0"
 authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
 edition = "2018"
+publish = false
 
 [dev-dependencies]
 criterion = "0.3"

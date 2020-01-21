@@ -153,6 +153,8 @@ macro_rules! create_scenarios {
 create_scenarios! {
     [pow2, "powers of two", &mut (8..11).map(|x| 2usize.pow(x))]
     [pow3, "powers of three", &mut (8..11).map(|x| 3usize.pow(x))]
+    [pow5, "powers of five", &mut (3..6).map(|x| 5usize.pow(x))]
+    [composite, "composites of 2, 3, 5", &mut [222, 722, 1418].iter().map(|x| *x)]
     [prime, "primes", &mut [191, 439, 1013].iter().map(|x| *x)]
 }
 

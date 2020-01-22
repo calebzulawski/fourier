@@ -82,12 +82,12 @@ pub trait Fft {
     }
 }
 
-pub(crate) enum Either<F1, F2> {
-    Left(F1),
-    Right(F2),
+pub(crate) enum Fallback<F1, F2> {
+    Primary(F1),
+    Secondary(F2),
 }
 
-impl<F1, F2, R> Fft for Either<F1, F2>
+impl<F1, F2, R> Fft for Fallback<F1, F2>
 where
     F1: Fft<Real = R>,
     F2: Fft<Real = R>,
@@ -97,15 +97,15 @@ where
 
     fn size(&self) -> usize {
         match *self {
-            Either::Left(ref f1) => f1.size(),
-            Either::Right(ref f2) => f2.size(),
+            Fallback::Primary(ref f1) => f1.size(),
+            Fallback::Secondary(ref f2) => f2.size(),
         }
     }
 
     fn transform_in_place(&self, input: &mut [Complex<Self::Real>], transform: Transform) {
         match *self {
-            Either::Left(ref f1) => f1.transform_in_place(input, transform),
-            Either::Right(ref f2) => f2.transform_in_place(input, transform),
+            Fallback::Primary(ref f1) => f1.transform_in_place(input, transform),
+            Fallback::Secondary(ref f2) => f2.transform_in_place(input, transform),
         }
     }
 }

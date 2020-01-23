@@ -17,6 +17,7 @@ include = [
     "/tests/**/*.rs",
     "/tests/**/*.json",
 ]
+keywords = ["fft", "fourier", "transform"]
 
 [dependencies]
 num-traits = "0.2"

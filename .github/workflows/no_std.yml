@@ -1,0 +1,29 @@
+name: no_std
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version:
+          - 1.38.0
+          - stable
+          - beta
+          - nightly
+        features:
+          - --no-default-features
+          - --no-default-features --features alloc
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.version }}
+        default: true
+        profile: minimal
+        target: thumbv6m-none-eabi
+    - name: Build
+      run: cargo build --verbose --manifest-path fourier/Cargo.toml ${{ matrix.features }}

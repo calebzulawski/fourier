@@ -4,9 +4,15 @@
 use crate::fft::{Fft, Transform};
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
+use core::cell::Cell;
 use num_complex::Complex;
 use num_traits::One;
-use std::cell::Cell;
+
+#[cfg(not(feature = "std"))]
+use num_traits::Float as _; // enable sqrt without std
+
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{boxed::Box, vec, vec::Vec};
 
 fn num_factors(factor: usize, mut value: usize) -> usize {
     let mut count = 0;
@@ -30,7 +36,7 @@ fn make_twiddles<T: FftFloat>(
             let m = size / *radix;
             for i in 0..m {
                 #[target_cfg(target = "[x86|x86_64]+avx")]
-                let vector_width = 32 / std::mem::size_of::<Complex<T>>();
+                let vector_width = 32 / core::mem::size_of::<Complex<T>>();
                 #[target_cfg(not(target = "[x86|x86_64]+avx"))]
                 let vector_width = 1;
 
@@ -164,7 +170,7 @@ macro_rules! make_radix_fns {
                     // Loop over full vectors, with a final overlapping vector
                     for j in (0..full_count.unwrap())
                         .step_by(width!())
-                        .chain(std::iter::once(final_offset.unwrap()))
+                        .chain(core::iter::once(final_offset.unwrap()))
                     {
                         // Load full vectors
                         let mut scratch = [zeroed!(); $radix];

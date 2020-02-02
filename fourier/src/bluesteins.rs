@@ -1,10 +1,16 @@
 use crate::float::FftFloat;
 use crate::{Fft, Transform};
+use core::cell::Cell;
 use num_complex::Complex;
-use std::cell::Cell;
+
+#[cfg(not(feature = "std"))]
+use num_traits::Float as _; // enable sqrt without std
+
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{boxed::Box, vec};
 
 fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
-    let theta = index * std::f64::consts::PI / size as f64;
+    let theta = index * core::f64::consts::PI / size as f64;
     Complex::new(
         T::from_f64(theta.cos()).unwrap(),
         T::from_f64(-theta.sin()).unwrap(),

@@ -19,10 +19,15 @@ include = [
 ]
 keywords = ["fft", "fourier", "transform"]
 
+[features]
+default = ["std"]
+std = ["multiversion/runtime_dispatch", "num-traits/std"]
+alloc = []
+
 [dependencies]
-num-traits = "0.2"
-num-complex = "0.2"
-multiversion = "0.3"
+multiversion = { git = "http://github.com/calebzulawski/multiversion", version = "0.3", default-features = false }
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+num-complex = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 float-cmp = "0.6"

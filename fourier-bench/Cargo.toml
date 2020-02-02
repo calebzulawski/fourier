@@ -7,11 +7,11 @@ publish = false
 
 [dev-dependencies]
 criterion = "0.3"
+fftw = { version = "0.6", default-features = false, features = ["system"] }
+fourier = { path = "../fourier" }
 num = "0.2"
 rand = "0.7"
 rustfft = "3"
-fftw = { version = "0.6", default-features = false, features = ["system"] }
-fourier = { path = "../fourier" }
 
 [[bench]]
 name = "fft_bench"

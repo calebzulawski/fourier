@@ -12,5 +12,5 @@ doc = false
 
 [dependencies]
 fourier = { path = "../fourier" }
-num-complex = "0.2"
 libc = "0.2"
+num-complex = "0.2"

@@ -2,7 +2,11 @@
 
 members = [
     "fourier",
+    "fourier-algorithms",
     "fourier-bench",
     "fourier-ffi",
     "fourier-prof",
 ]
+
+[profile.release]
+lto = true

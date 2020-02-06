@@ -1,118 +1,97 @@
 #![allow(unused_unsafe)]
 #![allow(unused_macros)]
 
-use crate::fft::{Fft, Transform};
+#[macro_use]
+mod butterfly;
+#[macro_use]
+mod avx_optimization;
+
+use crate::fft::Transform;
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
-use core::cell::Cell;
 use num_complex::Complex;
-use num_traits::One;
+use num_traits::One as _;
 
 #[cfg(not(feature = "std"))]
 use num_traits::Float as _; // enable sqrt without std
 
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-use alloc::{boxed::Box, vec, vec::Vec};
+const NUM_RADICES: usize = 5;
+const RADICES: [usize; NUM_RADICES] = [4, 8, 4, 3, 2];
 
-fn num_factors(factor: usize, mut value: usize) -> usize {
-    let mut count = 0;
-    while value % factor == 0 {
-        value /= factor;
-        count += 1;
-    }
-    count
-}
-
-#[multiversion::target_clones("[x86|x86_64]+avx")]
-fn make_twiddles<T: FftFloat>(
-    mut size: usize,
-    stages: &Vec<(usize, usize)>,
-) -> (Vec<Complex<T>>, Vec<Complex<T>>) {
-    let mut forward_twiddles = Vec::new();
-    let mut reverse_twiddles = Vec::new();
-    let mut stride = 1;
-    for (radix, count) in stages {
-        for _ in 0..*count {
-            let m = size / *radix;
-            for i in 0..m {
-                #[target_cfg(target = "[x86|x86_64]+avx")]
-                let vector_width = 32 / core::mem::size_of::<Complex<T>>();
-                #[target_cfg(not(target = "[x86|x86_64]+avx"))]
-                let vector_width = 1;
-
-                let width = {
-                    if stride < vector_width {
-                        1
-                    } else {
-                        vector_width
-                    }
-                };
-
-                for _ in 0..width {
-                    forward_twiddles.push(Complex::one());
-                    reverse_twiddles.push(Complex::one());
-                }
-                for j in 1..*radix {
-                    let forward = compute_twiddle(i * j, size, true);
-                    let reverse = compute_twiddle(i * j, size, false);
-                    for _ in 0..width {
-                        forward_twiddles.push(forward);
-                        reverse_twiddles.push(reverse);
-                    }
-                }
-            }
-            size /= *radix;
-            stride *= *radix;
-        }
-    }
-    (forward_twiddles, reverse_twiddles)
-}
-
-/// Adds a stage with radix equal to the vector width, if possible
-fn initial_stage(size: usize, stages: &mut Vec<(usize, usize)>) -> usize {
-    if size % 4 == 0 {
-        stages.push((4, 1));
-        size / 4
-    } else {
-        size
-    }
-}
-
-/// Adds as many stages as possible with the provided radix
-fn latter_stages(radix: usize, size: usize, stages: &mut Vec<(usize, usize)>) -> usize {
-    let count = num_factors(radix, size);
-    if count > 0 {
-        stages.push((radix, count));
-    }
-    size / (radix.pow(count as u32))
-}
-
-struct Stages<T> {
+pub struct Stages {
     size: usize,
-    stages: Vec<(usize, usize)>,
-    forward_twiddles: Vec<Complex<T>>,
-    reverse_twiddles: Vec<Complex<T>>,
+    counts: [usize; NUM_RADICES],
 }
 
-impl<T: FftFloat> Stages<T> {
-    fn new(size: usize) -> Option<Self> {
-        let mut stages = Vec::new();
-        let current_size = initial_stage(size, &mut stages);
-        let current_size = latter_stages(8, current_size, &mut stages);
-        let current_size = latter_stages(4, current_size, &mut stages);
-        let current_size = latter_stages(3, current_size, &mut stages);
-        let current_size = latter_stages(2, current_size, &mut stages);
-        if current_size != 1 {
-            None
-        } else {
-            let (forward_twiddles, reverse_twiddles) = make_twiddles(size, &stages);
-            Some(Self {
-                size,
-                stages,
-                forward_twiddles,
-                reverse_twiddles,
-            })
+impl Stages {
+    pub fn new(size: usize) -> Option<Self> {
+        let mut current_size = size;
+        let mut counts = [0usize; NUM_RADICES];
+        if current_size % RADICES[0] == 0 {
+            current_size /= RADICES[0];
+            counts[0] = 1;
         }
+        for (count, radix) in counts.iter_mut().zip(&RADICES).skip(1) {
+            while current_size % radix == 0 {
+                current_size /= radix;
+                *count += 1;
+            }
+        }
+        if current_size == 1 {
+            Some(Stages { size, counts })
+        } else {
+            None
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    pub fn initialize_twiddles<T: FftFloat, E: Extend<Complex<T>>>(
+        &self,
+        twiddles: &mut E,
+        forward: bool,
+    ) {
+        let mut size = self.size;
+        let mut stride = 1;
+        for (radix, count) in RADICES.iter().zip(&self.counts) {
+            for _ in 0..*count {
+                let m = self.size / radix;
+                for i in 0..m {
+                    twiddles.extend(core::iter::once(Complex::<T>::one()));
+                    for j in 1..*radix {
+                        twiddles.extend(core::iter::once(compute_twiddle(
+                            i * j,
+                            self.size,
+                            forward,
+                        )));
+                    }
+                }
+                size /= radix;
+                stride *= radix;
+            }
+        }
+    }
+
+    pub fn apply_f32(
+        &self,
+        input: &mut [Complex<f32>],
+        output: &mut [Complex<f32>],
+        twiddles: &[Complex<f32>],
+        transform: Transform,
+    ) {
+        apply_stages_f32(input, output, &self.counts, twiddles, self.size, transform);
+    }
+
+    pub fn apply_f64(
+        &self,
+        input: &mut [Complex<f64>],
+        output: &mut [Complex<f64>],
+        twiddles: &[Complex<f64>],
+        transform: Transform,
+    ) {
+        apply_stages_f64(input, output, &self.counts, twiddles, self.size, transform);
     }
 }
 
@@ -125,7 +104,7 @@ macro_rules! make_radix_fns {
 
         #[multiversion::target_clones("[x86|x86_64]+avx")]
         #[inline]
-        pub(super) fn $name(
+        pub fn $name(
             input: &[num_complex::Complex<$type>],
             output: &mut [num_complex::Complex<$type>],
             _forward: bool,
@@ -161,7 +140,7 @@ macro_rules! make_radix_fns {
                         let mut twiddles = [zeroed!(); $radix];
                         for k in 1..$radix {
                             twiddles[k] = unsafe {
-                                load_wide!(cached_twiddles.as_ptr().add((i * $radix + k) * width!()))
+                                broadcast!(cached_twiddles.as_ptr().add((i * $radix + k)).read())
                             };
                         }
                         twiddles
@@ -263,7 +242,9 @@ macro_rules! make_stage_fns {
         fn $name(
             input: &mut [Complex<$type>],
             output: &mut [Complex<$type>],
-            stages: &Stages<$type>,
+            stages: &[usize; NUM_RADICES],
+            mut twiddles: &[Complex<$type>],
+            mut size: usize,
             transform: Transform,
         ) {
             #[static_dispatch]
@@ -290,18 +271,12 @@ macro_rules! make_stage_fns {
             crate::generic_vector! { $type };
 
             assert_eq!(input.len(), output.len());
-            assert_eq!(stages.size, input.len());
+            assert_eq!(size, input.len());
 
-            let mut size = stages.size;
             let mut stride = 1;
-            let mut twiddles: &[Complex<$type>] = if transform.is_forward() {
-                &stages.forward_twiddles
-            } else {
-                &stages.reverse_twiddles
-            };
 
             let mut data_in_output = false;
-            for (radix, iterations) in &stages.stages {
+            for (radix, iterations) in RADICES.iter().zip(stages) {
                 let mut iteration = 0;
 
                 // Use partial loads until the stride is large enough
@@ -340,14 +315,14 @@ macro_rules! make_stage_fns {
                     }
                     size /= radix;
                     stride *= radix;
-                    twiddles = &twiddles[size * radix * width!()..];
+                    twiddles = &twiddles[size * radix ..];
                     data_in_output = !data_in_output;
                 }
             }
             if let Some(scale) = match transform {
                 Transform::Fft | Transform::UnscaledIfft => None,
-                Transform::Ifft => Some(1. / (stages.size as $type)),
-                Transform::SqrtScaledFft | Transform::SqrtScaledIfft => Some(1. / (stages.size as $type).sqrt()),
+                Transform::Ifft => Some(1. / (input.len() as $type)),
+                Transform::SqrtScaledFft | Transform::SqrtScaledIfft => Some(1. / (input.len() as $type).sqrt()),
             } {
                 if data_in_output {
                     for (x, y) in output.iter().zip(input.iter_mut()) {
@@ -368,87 +343,3 @@ macro_rules! make_stage_fns {
 }
 make_stage_fns! { f32, apply_stages_f32, radix_f32 }
 make_stage_fns! { f64, apply_stages_f64, radix_f64 }
-
-struct PrimeFactor32 {
-    stages: Stages<f32>,
-    work: Cell<Box<[Complex<f32>]>>,
-    size: usize,
-}
-
-impl PrimeFactor32 {
-    fn new(size: usize) -> Option<Self> {
-        if let Some(stages) = Stages::new(size) {
-            Some(Self {
-                stages,
-                work: Cell::new(vec![Complex::default(); size].into_boxed_slice()),
-                size,
-            })
-        } else {
-            None
-        }
-    }
-}
-
-impl Fft for PrimeFactor32 {
-    type Real = f32;
-
-    fn size(&self) -> usize {
-        self.size
-    }
-
-    fn transform_in_place(&self, input: &mut [Complex<f32>], transform: Transform) {
-        let mut work = self.work.take();
-        apply_stages_f32(input, &mut work, &self.stages, transform);
-        self.work.set(work);
-    }
-}
-
-pub fn create_f32(size: usize) -> Option<Box<dyn Fft<Real = f32> + Send>> {
-    if let Some(fft) = PrimeFactor32::new(size) {
-        Some(Box::new(fft))
-    } else {
-        None
-    }
-}
-
-struct PrimeFactor64 {
-    stages: Stages<f64>,
-    work: Cell<Box<[Complex<f64>]>>,
-    size: usize,
-}
-
-impl PrimeFactor64 {
-    fn new(size: usize) -> Option<Self> {
-        if let Some(stages) = Stages::new(size) {
-            Some(Self {
-                stages,
-                work: Cell::new(vec![Complex::default(); size].into_boxed_slice()),
-                size,
-            })
-        } else {
-            None
-        }
-    }
-}
-
-impl Fft for PrimeFactor64 {
-    type Real = f64;
-
-    fn size(&self) -> usize {
-        self.size
-    }
-
-    fn transform_in_place(&self, input: &mut [Complex<f64>], transform: Transform) {
-        let mut work = self.work.take();
-        apply_stages_f64(input, &mut work, &self.stages, transform);
-        self.work.set(work);
-    }
-}
-
-pub fn create_f64(size: usize) -> Option<Box<dyn Fft<Real = f64> + Send>> {
-    if let Some(fft) = PrimeFactor64::new(size) {
-        Some(Box::new(fft))
-    } else {
-        None
-    }
-}

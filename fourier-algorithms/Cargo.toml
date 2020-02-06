@@ -1,0 +1,15 @@
+[package]
+name = "fourier-algorithms"
+version = "0.1.0"
+authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+edition = "2018"
+
+[features]
+default = ["std"]
+std = ["multiversion/runtime_dispatch", "num-traits/std"]
+alloc = []
+
+[dependencies]
+multiversion = { git = "http://github.com/calebzulawski/multiversion", version = "0.3", default-features = false }
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+num-complex = { version = "0.2", default-features = false }

@@ -57,15 +57,11 @@ impl Stages {
         let mut stride = 1;
         for (radix, count) in RADICES.iter().zip(&self.counts) {
             for _ in 0..*count {
-                let m = self.size / radix;
+                let m = size / radix;
                 for i in 0..m {
                     twiddles.extend(core::iter::once(Complex::<T>::one()));
                     for j in 1..*radix {
-                        twiddles.extend(core::iter::once(compute_twiddle(
-                            i * j,
-                            self.size,
-                            forward,
-                        )));
+                        twiddles.extend(core::iter::once(compute_twiddle(i * j, size, forward)));
                     }
                 }
                 size /= radix;

@@ -5,6 +5,7 @@ members = [
     "fourier-algorithms",
     "fourier-bench",
     "fourier-ffi",
+    "fourier-macros",
     "fourier-prof",
 ]
 

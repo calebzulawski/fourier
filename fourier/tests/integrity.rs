@@ -190,3 +190,67 @@ generate_test! { f32, integrity_forward_f32, create_fft_f32, near_f32, true }
 generate_test! { f32, integrity_inverse_f32, create_fft_f32, near_f32, false }
 generate_test! { f64, integrity_forward_f64, create_fft_f64, near_f64, true }
 generate_test! { f64, integrity_inverse_f64, create_fft_f64, near_f64, false }
+
+macro_rules! generate_static_test {
+    {
+        $type:ty, $fftname:ident, $name:ident, $comparison:ident, $forward:expr
+    } => {
+        #[test]
+        fn $name() {
+            use fourier::Fft;
+            let fft = $fftname::default();
+            let stddev = if $forward {
+                1.0
+            } else {
+                fft.size() as $type
+            };
+            let distribution = Normal::new(0.0, stddev).unwrap();
+            let rng: StdRng = SeedableRng::seed_from_u64(0xdeadbeef);
+            let input = rng
+                .sample_iter(&distribution)
+                .zip(rand::thread_rng().sample_iter(&distribution))
+                .take(fft.size())
+                .map(|(x, y)| Complex::new(x, y))
+                .collect::<Vec<_>>();
+            let mut fft_output = vec![Complex::default(); fft.size()];
+            let mut dft_output = vec![Complex::default(); fft.size()];
+            let transform = if $forward {
+                fourier::Transform::Fft
+            } else {
+                fourier::Transform::Ifft
+            };
+            let reference = if $forward {
+                dft::<$type>
+            } else {
+                idft::<$type>
+            };
+            fft.transform(&input, &mut fft_output, transform);
+            reference(&input, &mut dft_output);
+            $comparison(&dft_output, &fft_output);
+        }
+    }
+}
+
+#[fourier::static_fft(f32, 64)]
+#[derive(Default)]
+struct StaticFft64f32;
+generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_forward, near_f32, true }
+generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_inverse, near_f32, false }
+
+#[fourier::static_fft(f64, 64)]
+#[derive(Default)]
+struct StaticFft64f64;
+generate_static_test! { f64, StaticFft64f64, integrity_static_f64_64_forward, near_f64, true }
+generate_static_test! { f64, StaticFft64f64, integrity_static_f64_64_inverse, near_f64, false }
+
+#[fourier::static_fft(f32, 73)]
+#[derive(Default)]
+struct StaticFft73f32;
+generate_static_test! { f32, StaticFft73f32, integrity_static_f32_73_forward, near_f32, true }
+generate_static_test! { f32, StaticFft73f32, integrity_static_f32_73_inverse, near_f32, false }
+
+#[fourier::static_fft(f64, 73)]
+#[derive(Default)]
+struct StaticFft73f64;
+generate_static_test! { f64, StaticFft73f64, integrity_static_f64_73_forward, near_f64, true }
+generate_static_test! { f64, StaticFft73f64, integrity_static_f64_73_inverse, near_f64, false }

@@ -1,5 +1,5 @@
 use crate::{Autosort, Fft, FftFloat, Transform};
-use core::cell::Cell;
+use core::cell::RefCell;
 use core::marker::PhantomData;
 use num_complex::Complex;
 
@@ -61,34 +61,61 @@ fn initialize_x_twiddles<T: FftFloat, E: Extend<Complex<T>>>(
 }
 
 /// Implements Bluestein's algorithm for arbitrary FFT sizes.
-pub struct Bluesteins<T, InnerFft, Storage: Default> {
+pub struct Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work> {
     size: usize,
     inner_fft: InnerFft,
-    w_forward: Storage,
-    w_inverse: Storage,
-    x_forward: Storage,
-    x_inverse: Storage,
-    work: Cell<Storage>,
+    w_forward: WTwiddles,
+    w_inverse: WTwiddles,
+    x_forward: XTwiddles,
+    x_inverse: XTwiddles,
+    work: RefCell<Work>,
     real_type: PhantomData<T>,
+}
+
+impl<T, InnerFft, WTwiddles, XTwiddles, Work> Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work> {
+    /// Create a new transform generator from parts.  Twiddles factors and work must be the correct
+    /// size.
+    pub unsafe fn new_from_parts(
+        size: usize,
+        inner_fft: InnerFft,
+        w_forward: WTwiddles,
+        w_inverse: WTwiddles,
+        x_forward: XTwiddles,
+        x_inverse: XTwiddles,
+        work: Work,
+    ) -> Self {
+        Self {
+            size,
+            inner_fft,
+            w_forward,
+            w_inverse,
+            x_forward,
+            x_inverse,
+            work: RefCell::new(work),
+            real_type: PhantomData,
+        }
+    }
 }
 
 impl<
         T: FftFloat,
         InnerFft: Fft<Real = T>,
-        Storage: Default + Extend<Complex<T>> + AsMut<[Complex<T>]>,
-    > Bluesteins<T, InnerFft, Storage>
+        WTwiddles: Default + Extend<Complex<T>> + AsMut<[Complex<T>]>,
+        XTwiddles: Default + Extend<Complex<T>>,
+        Work: Default + Extend<Complex<T>>,
+    > Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
 {
     /// Create a new Bluestein's algorithm generator.
     pub fn new_with_fft<F: Fn(usize) -> InnerFft>(size: usize, inner_fft_maker: F) -> Self {
         let inner_size = (2 * size - 1).checked_next_power_of_two().unwrap();
         let inner_fft = inner_fft_maker(inner_size);
-        let mut w_forward = Storage::default();
-        let mut w_inverse = Storage::default();
-        let mut x_forward = Storage::default();
-        let mut x_inverse = Storage::default();
+        let mut w_forward = WTwiddles::default();
+        let mut w_inverse = WTwiddles::default();
+        let mut x_forward = XTwiddles::default();
+        let mut x_inverse = XTwiddles::default();
         initialize_w_twiddles(size, &inner_fft, &mut w_forward, &mut w_inverse);
         initialize_x_twiddles(size, &mut x_forward, &mut x_inverse);
-        let mut work = Storage::default();
+        let mut work = Work::default();
         work.extend(core::iter::repeat(Complex::default()).take(inner_fft.size()));
         Self {
             size,
@@ -97,89 +124,93 @@ impl<
             w_inverse,
             x_forward,
             x_inverse,
-            work: Cell::new(work),
+            work: RefCell::new(work),
             real_type: PhantomData,
         }
     }
 }
 
-impl<Storage: Default + Extend<Complex<f32>> + AsRef<[Complex<f32>]> + AsMut<[Complex<f32>]>>
-    Bluesteins<f32, Autosort<f32, Storage>, Storage>
-{
-    /// Create a new Bluestein's algorithm generator.
-    pub fn new(size: usize) -> Self {
-        Self::new_with_fft(size, |size| Autosort::new(size).unwrap())
-    }
-}
-
-impl<Storage: Default + Extend<Complex<f64>> + AsRef<[Complex<f64>]> + AsMut<[Complex<f64>]>>
-    Bluesteins<f64, Autosort<f64, Storage>, Storage>
-{
-    /// Create a new Bluestein's algorithm generator.
-    pub fn new(size: usize) -> Self {
-        Self::new_with_fft(size, |size| Autosort::new(size).unwrap())
-    }
-}
-
 impl<
-        InnerFft: Fft<Real = f32>,
-        Storage: Default + AsRef<[Complex<f32>]> + AsMut<[Complex<f32>]>,
-    > Fft for Bluesteins<f32, InnerFft, Storage>
+        T: FftFloat,
+        InnerFft: Fft<Real = T>,
+        WTwiddles: AsRef<[Complex<T>]>,
+        XTwiddles: AsRef<[Complex<T>]>,
+        Work: AsRef<[Complex<T>]>,
+    > Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
 {
-    type Real = f32;
-
-    fn size(&self) -> usize {
-        self.size
+    /// Return the w-twiddle factors.
+    pub fn w_twiddles(&self) -> (&[Complex<T>], &[Complex<T>]) {
+        (self.w_forward.as_ref(), self.w_inverse.as_ref())
     }
 
-    fn transform_in_place(&self, input: &mut [Complex<f32>], transform: Transform) {
-        let mut work = self.work.take();
-        let (x, w) = if transform.is_forward() {
-            (&self.x_forward, &self.w_forward)
-        } else {
-            (&self.x_inverse, &self.w_inverse)
-        };
-        apply(
-            input,
-            work.as_mut(),
-            x.as_ref(),
-            w.as_ref(),
-            &self.inner_fft,
-            transform,
-        );
-        self.work.set(work);
+    /// Return the w-twiddle factors.
+    pub fn x_twiddles(&self) -> (&[Complex<T>], &[Complex<T>]) {
+        (self.x_forward.as_ref(), self.x_inverse.as_ref())
+    }
+
+    /// Return the inner FFT size.
+    pub fn inner_fft_size(&self) -> usize {
+        self.inner_fft.size()
+    }
+
+    /// Return the work buffer size.
+    pub fn work_size(&self) -> usize {
+        self.work.borrow().as_ref().len()
     }
 }
 
-impl<
-        InnerFft: Fft<Real = f64>,
-        Storage: Default + AsRef<[Complex<f64>]> + AsMut<[Complex<f64>]>,
-    > Fft for Bluesteins<f64, InnerFft, Storage>
-{
-    type Real = f64;
+macro_rules! implement {
+    {
+        $type:ty
+    } => {
+        impl<
+                AutosortTwiddles: Default + Extend<Complex<$type>> + AsRef<[Complex<$type>]>,
+                AutosortWork: Default + Extend<Complex<$type>> + AsMut<[Complex<$type>]>,
+                WTwiddles: Default + Extend<Complex<$type>> + AsMut<[Complex<$type>]>,
+                XTwiddles: Default + Extend<Complex<$type>>,
+                Work: Default + Extend<Complex<$type>>,
+            > Bluesteins<$type, Autosort<$type, AutosortTwiddles, AutosortWork>, WTwiddles, XTwiddles, Work>
+        {
+            /// Create a new Bluestein's algorithm generator.
+            pub fn new(size: usize) -> Self {
+                Self::new_with_fft(size, |size| Autosort::new(size).unwrap())
+            }
+        }
 
-    fn size(&self) -> usize {
-        self.size
-    }
+        impl<
+                InnerFft: Fft<Real = $type>,
+                WTwiddles: AsRef<[Complex<$type>]>,
+                XTwiddles: AsRef<[Complex<$type>]>,
+                Work: AsMut<[Complex<$type>]>,
+            > Fft for Bluesteins<$type, InnerFft, WTwiddles, XTwiddles, Work>
+        {
+            type Real = $type;
 
-    fn transform_in_place(&self, input: &mut [Complex<f64>], transform: Transform) {
-        let mut work = self.work.take();
-        let (x, w) = if transform.is_forward() {
-            (&self.x_forward, &self.w_forward)
-        } else {
-            (&self.x_inverse, &self.w_inverse)
-        };
-        apply(
-            input,
-            work.as_mut(),
-            x.as_ref(),
-            w.as_ref(),
-            &self.inner_fft,
-            transform,
-        );
-        self.work.set(work);
+            fn size(&self) -> usize {
+                self.size
+            }
+
+            fn transform_in_place(&self, input: &mut [Complex<$type>], transform: Transform) {
+                let mut work = self.work.borrow_mut();
+                let (x, w) = if transform.is_forward() {
+                    (&self.x_forward, &self.w_forward)
+                } else {
+                    (&self.x_inverse, &self.w_inverse)
+                };
+                apply(
+                    input,
+                    work.as_mut(),
+                    x.as_ref(),
+                    w.as_ref(),
+                    &self.inner_fft,
+                    transform,
+                );
+            }
+        }
     }
 }
+implement! { f32 }
+implement! { f64 }
 
 #[multiversion::target_clones("[x86|x86_64]+avx")]
 #[inline]

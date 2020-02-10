@@ -1,3 +1,6 @@
+//! This crate provides the procedural attribute macro for generating heapless, statically-sized
+//! FFTs. This crate is reexported in the [`fourier`](../fourier/index.html) crate.
+
 extern crate proc_macro;
 use num_complex::Complex;
 use proc_macro2::{Span, TokenStream};
@@ -23,6 +26,19 @@ impl Parse for Config {
     }
 }
 
+/// Implements a statically-sized heapless FFT for a struct.
+///
+/// The attribute takes two arguments, floating-point type (`f32` or `f64`) and a size.
+/// This implementation does not require any heap allocations and is suitable for `#[no_std]`
+/// usage.
+///
+/// The following implements `Fft<Real = f32>` for `StaticFft`:
+/// ```
+/// # use fourier_macros::static_fft;
+/// #[static_fft(f32, 128)]
+/// #[derive(Default)]
+/// struct StaticFft;
+/// ```
 #[proc_macro_attribute]
 pub fn static_fft(
     attr: proc_macro::TokenStream,

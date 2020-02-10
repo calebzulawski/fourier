@@ -1,4 +1,3 @@
-use fourier::{create_fft_f32, create_fft_f64};
 use num_complex::Complex;
 use num_traits::{Float, FromPrimitive, NumAssign};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -147,6 +146,7 @@ macro_rules! generate_test {
     {
         $type:ty, $name:ident, $fft_gen:ident, $comparison:ident, $forward:expr
     } => {
+        #[cfg(any(feature = "std", feature = "alloc"))]
         #[test]
         fn $name() {
             const MAX_SIZE: usize = 256;
@@ -177,7 +177,7 @@ macro_rules! generate_test {
             };
             for size in 1..MAX_SIZE {
                 println!("SIZE: {}", size);
-                let fft = $fft_gen(size);
+                let fft = fourier::$fft_gen(size);
                 fft.transform(&input[0..size], &mut fft_output[0..size], transform);
                 reference(&input[0..size], &mut dft_output[0..size]);
                 $comparison(&dft_output[0..size], &fft_output[0..size]);

@@ -21,12 +21,12 @@ keywords = ["fft", "fourier", "transform"]
 
 [features]
 default = ["std"]
-std = ["fourier-algorithms/std"]
+std = ["fourier-algorithms/std", "fourier-macros/std"]
 alloc = []
 
 [dependencies]
 fourier-algorithms = { path = "../fourier-algorithms", version = "0.1.0", default-features = false }
-fourier-macros = { path = "../fourier-macros", version = "0.1.0" }
+fourier-macros = { path = "../fourier-macros", version = "0.1.0", default-features = false }
 num-complex = { version = "0.2", default-features = false }
 
 [dev-dependencies]

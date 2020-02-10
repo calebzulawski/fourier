@@ -22,6 +22,10 @@ keywords = ["fft", "fourier", "transform"]
 [lib]
 proc-macro = true
 
+[features]
+default = ["std"]
+std = ["fourier-algorithms/std"]
+
 [dependencies]
 syn = "1"
 quote = "1"

@@ -8,13 +8,14 @@
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
 
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Vec;
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{boxed::Box, vec::Vec};
 
 pub use fourier_algorithms::{Fft, Transform};
 pub use fourier_macros::static_fft;
 
 /// Create a complex-valued FFT over `f32` with the specified size.
+/// Requires the `std` or `alloc` feature.
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
     use fourier_algorithms::{Autosort, Bluesteins};
@@ -22,6 +23,11 @@ pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
     type Autosort32 = Autosort<f32, Vec<Complex<f32>>, Vec<Complex<f32>>>;
     type Bluesteins32 =
         Bluesteins<f32, Autosort32, Vec<Complex<f32>>, Vec<Complex<f32>>, Vec<Complex<f32>>>;
+
+    #[crate::static_fft(f32, 256)]
+    #[derive(Default)]
+    struct Static256;
+
     if let Some(fft) = Autosort32::new(size) {
         Box::new(fft)
     } else {
@@ -30,6 +36,7 @@ pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
 }
 
 /// Create a complex-valued FFT over `f64` with the specified size.
+/// Requires the `std` or `alloc` feature.
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub fn create_fft_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
     use fourier_algorithms::{Autosort, Bluesteins};

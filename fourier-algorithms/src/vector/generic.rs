@@ -20,15 +20,15 @@ macro_rules! generic_vector {
         }
 
         macro_rules! add {
-            { $a:expr, $b:expr } => { ($a + $b) }
+            { $a:expr, $b:expr } => { { $a + $b } }
         }
 
         macro_rules! sub {
-            { $a:expr, $b:expr } => { ($a - $b) }
+            { $a:expr, $b:expr } => { { $a - $b } }
         }
 
         macro_rules! mul {
-            { $a:expr, $b:expr } => { ($a * $b) }
+            { $a:expr, $b:expr } => { { $a * $b } }
         }
 
         macro_rules! rotate {
@@ -44,7 +44,7 @@ macro_rules! generic_vector {
         }
 
         macro_rules! load_wide {
-            { $from:expr } => { (*$from) }
+            { $from:expr } => { { *$from } }
         }
 
         macro_rules! store_wide {
@@ -52,7 +52,7 @@ macro_rules! generic_vector {
         }
 
         macro_rules! load_narrow {
-            { $from:expr } => { (*$from) }
+            { $from:expr } => { { *$from } }
         }
 
         macro_rules! store_narrow {

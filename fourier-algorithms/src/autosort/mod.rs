@@ -6,9 +6,11 @@ mod butterfly;
 #[macro_use]
 mod avx_optimization;
 
-use crate::fft::Transform;
+use crate::fft::{Fft, Transform};
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
+use core::cell::Cell;
+use core::marker::PhantomData;
 use num_complex::Complex;
 use num_traits::One as _;
 
@@ -18,12 +20,44 @@ use num_traits::Float as _; // enable sqrt without std
 const NUM_RADICES: usize = 5;
 const RADICES: [usize; NUM_RADICES] = [4, 8, 4, 3, 2];
 
-pub struct Stages {
-    size: usize,
+/// Initializes twiddles.
+fn initialize_twiddles<T: FftFloat, E: Extend<Complex<T>>>(
+    mut size: usize,
     counts: [usize; NUM_RADICES],
+    forward_twiddles: &mut E,
+    inverse_twiddles: &mut E,
+) {
+    let mut stride = 1;
+    for (radix, count) in RADICES.iter().zip(&counts) {
+        for _ in 0..*count {
+            let m = size / radix;
+            for i in 0..m {
+                forward_twiddles.extend(core::iter::once(Complex::<T>::one()));
+                inverse_twiddles.extend(core::iter::once(Complex::<T>::one()));
+                for j in 1..*radix {
+                    forward_twiddles.extend(core::iter::once(compute_twiddle(i * j, size, true)));
+                    inverse_twiddles.extend(core::iter::once(compute_twiddle(i * j, size, false)));
+                }
+            }
+            size /= radix;
+            stride *= radix;
+        }
+    }
 }
 
-impl Stages {
+/// Implements a mixed-radix Stockham autosort algorithm for multiples of 2 and 3.
+pub struct Autosort<T, Storage: Default> {
+    size: usize,
+    counts: [usize; NUM_RADICES],
+    forward_twiddles: Storage,
+    inverse_twiddles: Storage,
+    work: Cell<Storage>,
+    real_type: PhantomData<T>,
+}
+
+impl<T: FftFloat, Storage: Default + Extend<Complex<T>>> Autosort<T, Storage> {
+    /// Create a new Stockham autosort generator.  Returns `None` if the transform size cannot be
+    /// performed.
     pub fn new(size: usize) -> Option<Self> {
         let mut current_size = size;
         let mut counts = [0usize; NUM_RADICES];
@@ -38,56 +72,78 @@ impl Stages {
             }
         }
         if current_size == 1 {
-            Some(Stages { size, counts })
+            let mut forward_twiddles = Storage::default();
+            let mut inverse_twiddles = Storage::default();
+            initialize_twiddles(size, counts, &mut forward_twiddles, &mut inverse_twiddles);
+            let mut work = Storage::default();
+            work.extend(core::iter::repeat(Complex::default()).take(size));
+            Some(Self {
+                size,
+                counts,
+                forward_twiddles,
+                inverse_twiddles,
+                work: Cell::new(work),
+                real_type: PhantomData,
+            })
         } else {
             None
         }
     }
+}
 
-    pub fn size(&self) -> usize {
+impl<Storage: Default + AsRef<[Complex<f32>]> + AsMut<[Complex<f32>]>> Fft
+    for Autosort<f32, Storage>
+{
+    type Real = f32;
+
+    fn size(&self) -> usize {
         self.size
     }
 
-    pub fn initialize_twiddles<T: FftFloat, E: Extend<Complex<T>>>(
-        &self,
-        twiddles: &mut E,
-        forward: bool,
-    ) {
-        let mut size = self.size;
-        let mut stride = 1;
-        for (radix, count) in RADICES.iter().zip(&self.counts) {
-            for _ in 0..*count {
-                let m = size / radix;
-                for i in 0..m {
-                    twiddles.extend(core::iter::once(Complex::<T>::one()));
-                    for j in 1..*radix {
-                        twiddles.extend(core::iter::once(compute_twiddle(i * j, size, forward)));
-                    }
-                }
-                size /= radix;
-                stride *= radix;
-            }
-        }
+    fn transform_in_place(&self, input: &mut [Complex<f32>], transform: Transform) {
+        let mut work = self.work.take();
+        let twiddles = if transform.is_forward() {
+            &self.forward_twiddles
+        } else {
+            &self.inverse_twiddles
+        };
+        apply_stages_f32(
+            input,
+            work.as_mut(),
+            &self.counts,
+            twiddles.as_ref(),
+            self.size,
+            transform,
+        );
+        self.work.set(work);
+    }
+}
+
+impl<Storage: Default + AsRef<[Complex<f64>]> + AsMut<[Complex<f64>]>> Fft
+    for Autosort<f64, Storage>
+{
+    type Real = f64;
+
+    fn size(&self) -> usize {
+        self.size
     }
 
-    pub fn apply_f32(
-        &self,
-        input: &mut [Complex<f32>],
-        output: &mut [Complex<f32>],
-        twiddles: &[Complex<f32>],
-        transform: Transform,
-    ) {
-        apply_stages_f32(input, output, &self.counts, twiddles, self.size, transform);
-    }
-
-    pub fn apply_f64(
-        &self,
-        input: &mut [Complex<f64>],
-        output: &mut [Complex<f64>],
-        twiddles: &[Complex<f64>],
-        transform: Transform,
-    ) {
-        apply_stages_f64(input, output, &self.counts, twiddles, self.size, transform);
+    fn transform_in_place(&self, input: &mut [Complex<f64>], transform: Transform) {
+        let mut work = self.work.take();
+        let twiddles = if transform.is_forward() {
+            &self.forward_twiddles
+        } else {
+            &self.inverse_twiddles
+        };
+        apply_stages_f64(
+            input,
+            work.as_mut(),
+            &self.counts,
+            twiddles.as_ref(),
+            self.size,
+            transform,
+        );
+        self.work.set(work);
     }
 }
 
@@ -136,7 +192,7 @@ macro_rules! make_radix_fns {
                         let mut twiddles = [zeroed!(); $radix];
                         for k in 1..$radix {
                             twiddles[k] = unsafe {
-                                broadcast!(cached_twiddles.as_ptr().add((i * $radix + k)).read())
+                                broadcast!(cached_twiddles.as_ptr().add(i * $radix + k).read())
                             };
                         }
                         twiddles

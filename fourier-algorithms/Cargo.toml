@@ -2,7 +2,22 @@
 name = "fourier-algorithms"
 version = "0.1.0"
 authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Helper functions for the Fourier crate"
+repository = "https://github.com/calebzulawski/fourier"
+categories = ["algorithms", "mathematics", "multimedia::audio", "science"]
+readme = "README.md"
 edition = "2018"
+include = [
+    "/Cargo.toml",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+    "/README.md",
+    "/src/**",
+    "/tests/**/*.rs",
+    "/tests/**/*.json",
+]
+keywords = ["fft", "fourier", "transform"]
 
 [features]
 default = ["std"]

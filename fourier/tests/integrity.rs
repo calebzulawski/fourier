@@ -232,13 +232,11 @@ macro_rules! generate_static_test {
 }
 
 #[fourier::static_fft(f32, 64)]
-#[derive(Default)]
 struct StaticFft64f32;
 generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_forward, near_f32, true }
 generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_inverse, near_f32, false }
 
 #[fourier::static_fft(f64, 64)]
-#[derive(Default)]
 struct StaticFft64f64;
 generate_static_test! { f64, StaticFft64f64, integrity_static_f64_64_forward, near_f64, true }
 generate_static_test! { f64, StaticFft64f64, integrity_static_f64_64_inverse, near_f64, false }

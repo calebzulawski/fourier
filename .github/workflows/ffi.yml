@@ -26,7 +26,7 @@ jobs:
           default: true
           target: ${{ matrix.target }}
     - name: Build
-      run: cmake -S . -B build && make -C build
+      run: cmake -S fourier-ffi -B build && make -C build
     - name: Test
       run: make -C build test
     - name: Package

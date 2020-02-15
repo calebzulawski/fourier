@@ -55,16 +55,27 @@ add_custom_target(package
 set(CSOURCE "${CMAKE_CURRENT_SOURCE_DIR}/test_c")
 set(CINCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+find_package(Threads)
+set(STATIC_DEPS "${CMAKE_DL_LIBS}" "${CMAKE_THREAD_LIBS_INIT}")
+
+include(CheckLibraryExists)
+check_library_exists(m cabsf "" HAS_LIBM)
+if (HAS_LIBM)
+    set(LIBM "m")
+else ()
+    set(LIBM "")
+endif ()
+
 add_executable(test_c_static "${CSOURCE}/main.c")
-target_link_libraries(test_c_static ${FOURIER_LIB})
+target_link_libraries(test_c_static ${LIBM} ${STATIC_DEPS} ${FOURIER_LIB})
 target_include_directories(test_c_static PRIVATE ${CINCLUDE})
 
 add_executable(test_c_dynamic "${CSOURCE}/main.c")
-target_link_libraries(test_c_dynamic ${FOURIER_DLL})
+target_link_libraries(test_c_dynamic ${LIBM} ${FOURIER_DLL})
 target_include_directories(test_c_dynamic PRIVATE ${CINCLUDE})
 
 add_executable(test_cpp_static "${CSOURCE}/main.cpp")
-target_link_libraries(test_cpp_static ${FOURIER_LIB})
+target_link_libraries(test_cpp_static ${STATIC_DEPS} ${FOURIER_LIB})
 target_include_directories(test_cpp_static PRIVATE ${CINCLUDE})
 
 add_executable(test_cpp_dynamic "${CSOURCE}/main.cpp")

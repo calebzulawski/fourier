@@ -21,6 +21,3 @@ jobs:
     - name: Test
       run: make -C build test
       shell: bash
-    - name: Package
-      run: make -C build package
-      shell: bash

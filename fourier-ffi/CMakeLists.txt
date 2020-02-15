@@ -41,7 +41,7 @@ else ()
     set(TAR_FLAGS cfv)
     set(TAR_TYPE zip)
 endif ()
-add_custom_target(package
+add_custom_target(fourier_package
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/include/fourier.h ${CMAKE_CURRENT_BINARY_DIR}/fourier/include/fourier.h
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${FOURIER_DLL} ${CMAKE_CURRENT_BINARY_DIR}/fourier/lib/${FOURIER_DLL}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/${FOURIER_LIB} ${CMAKE_CURRENT_BINARY_DIR}/fourier/lib/${FOURIER_LIB}
@@ -55,9 +55,8 @@ add_custom_target(package
 set(CSOURCE "${CMAKE_CURRENT_SOURCE_DIR}/test_c")
 set(CINCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+# Use pthreads and libm
 find_package(Threads)
-set(STATIC_DEPS "${CMAKE_DL_LIBS}" "${CMAKE_THREAD_LIBS_INIT}")
-
 include(CheckLibraryExists)
 check_library_exists(m cabsf "" HAS_LIBM)
 if (HAS_LIBM)
@@ -66,8 +65,9 @@ else ()
     set(LIBM "")
 endif ()
 
+# Library orderings are magic and this is the correct incantation.
 add_executable(test_c_static "${CSOURCE}/main.c")
-target_link_libraries(test_c_static ${LIBM} ${STATIC_DEPS} ${FOURIER_LIB})
+target_link_libraries(test_c_static ${LIBM} ${FOURIER_LIB} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(test_c_static PRIVATE ${CINCLUDE})
 
 add_executable(test_c_dynamic "${CSOURCE}/main.c")
@@ -75,7 +75,7 @@ target_link_libraries(test_c_dynamic ${LIBM} ${FOURIER_DLL})
 target_include_directories(test_c_dynamic PRIVATE ${CINCLUDE})
 
 add_executable(test_cpp_static "${CSOURCE}/main.cpp")
-target_link_libraries(test_cpp_static ${STATIC_DEPS} ${FOURIER_LIB})
+target_link_libraries(test_cpp_static ${FOURIER_LIB} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(test_cpp_static PRIVATE ${CINCLUDE})
 
 add_executable(test_cpp_dynamic "${CSOURCE}/main.cpp")

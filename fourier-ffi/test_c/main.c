@@ -41,5 +41,6 @@ void test_double() {
 int main() {
   test_float();
   test_double();
+  printf("Tests ran successfully.\n");
   return 0;
 }

@@ -52,5 +52,6 @@ int main() {
   test<double>();
   test_c_float();
   test_c_double();
+  std::cout << "Tests ran successfully." << std::endl;
   return 0;
 }

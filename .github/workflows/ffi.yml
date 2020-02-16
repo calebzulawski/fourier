@@ -6,15 +6,41 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        type:
+          - x86_64-apple-darwin
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
+        include:
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            build: make
+            test: make test
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            build: make
+            test: make test
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+            generator: -G "Unix Makefiles"
+            build: make
+            test: make test
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            build: msbuild
+            test: ctest
 
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v2
+    - name: Rust Toolchain
+      run: rustup default ${{ matrix.target }}
     - name: Configure
-      run: cmake -S fourier-ffi -B build -G "Unix Makefiles"
+      run: cmake -S fourier-ffi -B build ${{ matrix.generator }}
     - name: Build
-      run: make -C build
+      run: ${{ matrix.build }}
+      working-directory: build
     - name: Test
-      run: make -C build test
+      run: ${{ matrix.test }}
+      working-directory: build

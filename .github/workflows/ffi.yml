@@ -17,7 +17,6 @@ jobs:
             os: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             os: windows-latest
-            find_msbuild: true
 
     runs-on: ${{ matrix.os }}
 

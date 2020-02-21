@@ -1,0 +1,22 @@
+# On Apple (MachO) set install name, compatibility version, and current version fields
+[target.'cfg(target_vendor = "apple")']
+rustflags = [
+    "-Clink-arg=-Wl,-install_name",
+    "-Clink-arg=-Wl,@FOURIER_DLL@",
+    "-Clink-arg=-Wl,-compatibility_version",
+    "-Clink-arg=-Wl,@VERSION_2@",
+    "-Clink-arg=-Wl,-current_version",
+    "-Clink-arg=-Wl,@VERSION_3@"
+]
+
+# On non-Apple Unix-like (ELF) set SONAME
+[target.'cfg(all(target_family = "unix", not(target_vendor = "apple")))']
+rustflags = ["-Clink-arg=-Wl,-soname,@FOURIER_DLL@"]
+
+# On Windows, set version
+[target.'cfg(target_family = "windows")']
+rustflags = ["-Clink-arg=/VERSION:@VERSION_2@"]
+
+# On any Unix-like, strip symbols
+[target.'cfg(target_family = "unix")']
+rustflags = ["-Clink-arg=-s"]

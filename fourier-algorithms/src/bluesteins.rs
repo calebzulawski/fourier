@@ -36,8 +36,8 @@ fn initialize_w_twiddles<
             }
         } {
             let twiddle = compute_half_twiddle(index, size);
-            forward_twiddles.extend(core::iter::once(twiddle));
-            inverse_twiddles.extend(core::iter::once(twiddle.conj()));
+            forward_twiddles.extend(core::iter::once(twiddle.conj()));
+            inverse_twiddles.extend(core::iter::once(twiddle));
         } else {
             forward_twiddles.extend(core::iter::once(Complex::default()));
             inverse_twiddles.extend(core::iter::once(Complex::default()));
@@ -55,8 +55,8 @@ fn initialize_x_twiddles<T: FftFloat, E: Extend<Complex<T>>>(
 ) {
     for i in 0..size {
         let twiddle = compute_half_twiddle(-(i as f64).powi(2), size);
-        forward_twiddles.extend(core::iter::once(twiddle));
-        inverse_twiddles.extend(core::iter::once(twiddle.conj()));
+        forward_twiddles.extend(core::iter::once(twiddle.conj()));
+        inverse_twiddles.extend(core::iter::once(twiddle));
     }
 }
 
@@ -255,7 +255,4 @@ fn apply<T: FftFloat, F: Fft<Real = T>>(
             }
         }
     }
-
-    // TODO: this shouldn't be necessary...
-    input[1..].reverse();
 }

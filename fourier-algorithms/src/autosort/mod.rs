@@ -6,6 +6,8 @@ mod butterfly;
 #[macro_use]
 mod avx_optimization;
 
+/*
+
 use crate::fft::{Fft, Transform};
 use crate::float::FftFloat;
 use crate::twiddle::compute_twiddle;
@@ -417,3 +419,5 @@ macro_rules! make_stage_fns {
 }
 make_stage_fns! { f32, apply_stages_f32, radix_f32 }
 make_stage_fns! { f64, apply_stages_f64, radix_f64 }
+
+*/

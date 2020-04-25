@@ -212,7 +212,8 @@ macro_rules! implement {
 implement! { f32 }
 implement! { f64 }
 
-#[multiversion::target_clones("[x86|x86_64]+avx")]
+#[multiversion::multiversion]
+#[clone(target = "[x86|x86_64]+avx")]
 #[inline]
 fn apply<T: FftFloat, F: Fft<Real = T>>(
     input: &mut [Complex<T>],

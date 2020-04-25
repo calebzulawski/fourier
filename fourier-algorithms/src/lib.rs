@@ -9,11 +9,11 @@ mod twiddle;
 mod vector;
 
 mod autosort;
-mod bluesteins;
+//mod bluesteins;
 mod fft;
 mod float;
 
 pub use autosort::*;
-pub use bluesteins::*;
+//pub use bluesteins::*;
 pub use fft::*;
 pub use float::*;

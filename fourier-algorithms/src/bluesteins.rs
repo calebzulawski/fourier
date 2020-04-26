@@ -73,31 +73,6 @@ pub struct Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work> {
     real_type: PhantomData<T>,
 }
 
-impl<T, InnerFft, WTwiddles, XTwiddles, Work> Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work> {
-    /// Create a new transform generator from parts.  Twiddles factors and work must be the correct
-    /// size.
-    pub unsafe fn new_from_parts(
-        size: usize,
-        inner_fft: InnerFft,
-        w_forward: WTwiddles,
-        w_inverse: WTwiddles,
-        x_forward: XTwiddles,
-        x_inverse: XTwiddles,
-        work: Work,
-    ) -> Self {
-        Self {
-            size,
-            inner_fft,
-            w_forward,
-            w_inverse,
-            x_forward,
-            x_inverse,
-            work: RefCell::new(work),
-            real_type: PhantomData,
-        }
-    }
-}
-
 /// Returns the size of the inner FFT required for Bluestein's FFT.
 pub fn inner_fft_size(size: usize) -> usize {
     (2 * size - 1).checked_next_power_of_two().unwrap()

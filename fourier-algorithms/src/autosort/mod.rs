@@ -1,11 +1,7 @@
 //! Implementation of a mixed-radix Stockham autosort FFT.
-#![allow(unused_unsafe)]
-#![allow(unused_macros)]
 
-#[macro_use]
-mod butterfly;
-#[macro_use]
 mod avx_optimization;
+mod butterfly;
 
 use crate::fft::{Fft, Transform};
 use crate::float::Float;

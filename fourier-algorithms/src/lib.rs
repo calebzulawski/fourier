@@ -5,9 +5,6 @@
 
 mod twiddle;
 
-#[macro_use]
-mod vector;
-
 pub mod autosort;
 pub mod bluesteins;
 mod fft;

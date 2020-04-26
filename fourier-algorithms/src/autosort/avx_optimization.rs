@@ -1,5 +1,26 @@
-#![allow(unused_unsafe)]
-#![allow(unused_macros)]
+#[cfg(target_arch = "x86")]
+use core::arch::x86::*;
+
+#[cfg(target_arch = "x86_64")]
+use core::arch::x86_64::*;
+
+#[multiversion::target("[x86|x86_64]+avx")]
+#[inline]
+unsafe fn cmul_f32(a: __m256, b: __m256) -> __m256 {
+    let re = _mm256_moveldup_ps(a);
+    let im = _mm256_movehdup_ps(a);
+    let sh = _mm256_shuffle_ps(b, b, 0xb1);
+    _mm256_addsub_ps(_mm256_mul_ps(re, b), _mm256_mul_ps(im, sh))
+}
+
+#[multiversion::target("[x86|x86_64]+avx")]
+#[inline]
+unsafe fn cmul_f64(a: __m256d, b: __m256d) -> __m256d {
+    let re = _mm256_shuffle_pd(a, a, 0x00);
+    let im = _mm256_shuffle_pd(a, a, 0x03);
+    let sh = _mm256_shuffle_pd(b, b, 0x01);
+    _mm256_addsub_pd(_mm256_mul_pd(re, b), _mm256_mul_pd(im, sh))
+}
 
 #[multiversion::target("[x86|x86_64]+avx")]
 #[inline]
@@ -10,7 +31,6 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
     size: usize,
     twiddles: &[num_complex::Complex<f32>],
 ) {
-    avx_vector! { f32 };
     const RADIX: usize = 4;
     let m = size / RADIX;
 
@@ -85,7 +105,7 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
         let mut out = _mm256_blend_ps(out_lo, out_hi, 0b0011_1100); // br0 bi0 br3 bi3 br1 bi1 br2 bi2
         if size != RADIX {
             let twiddles = _mm256_loadu_ps(twiddles.as_ptr().add(RADIX * i) as *const _);
-            out = mul!(out, twiddles);
+            out = cmul_f32(out, twiddles);
         }
         _mm256_storeu_ps(output.as_mut_ptr().add(RADIX * i) as *mut _, out);
     }
@@ -101,7 +121,6 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f64(
     size: usize,
     twiddles: &[num_complex::Complex<f64>],
 ) {
-    avx_vector! { f64 };
     const RADIX: usize = 4;
     let m = size / RADIX;
 
@@ -189,47 +208,10 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f64(
         if size != RADIX {
             let twiddles1 = _mm256_loadu_pd(twiddles.as_ptr().add(RADIX * i) as *const _);
             let twiddles2 = _mm256_loadu_pd(twiddles.as_ptr().add(RADIX * i + 2) as *const _);
-            out1 = mul!(out1, twiddles1);
-            out2 = mul!(out2, twiddles2);
+            out1 = cmul_f64(out1, twiddles1);
+            out2 = cmul_f64(out2, twiddles2);
         }
         _mm256_storeu_pd(output.as_mut_ptr().add(RADIX * i) as *mut _, out1);
         _mm256_storeu_pd(output.as_mut_ptr().add(RADIX * i + 2) as *mut _, out2);
-    }
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! avx_optimization {
-    {
-        f32, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
-    } => {
-        if $radix == 4 && $stride == 1 {
-            unsafe {
-                crate::autosort::avx_optimization::radix_4_stride_1_avx_f32($input, $output, $forward, $size, $twiddles);
-            }
-            true
-        } else {
-            false
-        }
-    };
-    {
-        f64, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
-    } => {
-        /*
-        if $radix == 4 && $stride == 1 {
-            unsafe {
-                crate::autosort::avx_optimization::radix_4_stride_1_avx_f64($input, $output, $forward, $size, $twiddles);
-            }
-            true
-        } else {
-            false
-        }
-        */
-        false
-    };
-    {
-        $type:ty, $radix:literal, $input:ident, $output:ident, $forward:ident, $size:ident, $stride:ident, $twiddles:ident
-    } => {
-        false
     }
 }

@@ -231,6 +231,7 @@ macro_rules! generate_static_test {
     }
 }
 
+/*
 #[fourier::static_fft(f32, 64)]
 struct StaticFft64f32;
 generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_forward, near_f32, true }
@@ -252,3 +253,4 @@ generate_static_test! { f32, StaticFft73f32, integrity_static_f32_73_inverse, ne
 struct StaticFft73f64;
 generate_static_test! { f64, StaticFft73f64, integrity_static_f64_73_forward, near_f64, true }
 generate_static_test! { f64, StaticFft73f64, integrity_static_f64_73_inverse, near_f64, false }
+*/

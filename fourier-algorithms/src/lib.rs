@@ -10,6 +10,7 @@ pub mod autosort;
 pub mod bluesteins;
 mod fft;
 mod float;
+pub mod identity;
 
 pub use array::*;
 pub use fft::*;

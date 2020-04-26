@@ -188,7 +188,7 @@ where
 ///
 /// Requires the `std` or `alloc` features.
 #[cfg(any(feature = "std", feature = "alloc"))]
-type HeapBluesteins<T> = Bluesteins<
+pub type HeapBluesteins<T> = Bluesteins<
     T,
     Autosort<T, Box<[crate::autosort::Step<T>]>, Box<[Complex<T>]>, Box<[Complex<T>]>>,
     Box<[Complex<T>]>,

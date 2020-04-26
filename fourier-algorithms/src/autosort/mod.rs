@@ -149,7 +149,7 @@ impl StepInit for Step<f32> {
         // AVX wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride <= safe_simd::x86::avx::Vcf32::width()
+            if parameters.stride >= safe_simd::x86::avx::Vcf32::width()
                 && safe_simd::x86::avx::Avx::new().is_some()
             {
                 let func: StepFn<f32> = match parameters.radix {
@@ -170,7 +170,7 @@ impl StepInit for Step<f32> {
         // SSE wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride <= safe_simd::x86::sse::Vcf32::width()
+            if parameters.stride >= safe_simd::x86::sse::Vcf32::width()
                 && safe_simd::x86::sse::Sse::new().is_some()
             {
                 let func: StepFn<f32> = match parameters.radix {
@@ -249,7 +249,7 @@ impl StepInit for Step<f64> {
         // AVX wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride <= safe_simd::x86::avx::Vcf64::width()
+            if parameters.stride >= safe_simd::x86::avx::Vcf64::width()
                 && safe_simd::x86::avx::Avx::new().is_some()
             {
                 let func: StepFn<f64> = match parameters.radix {
@@ -270,7 +270,7 @@ impl StepInit for Step<f64> {
         // SSE wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride <= safe_simd::x86::sse::Vcf64::width()
+            if parameters.stride >= safe_simd::x86::sse::Vcf64::width()
                 && safe_simd::x86::sse::Sse::new().is_some()
             {
                 let func: StepFn<f64> = match parameters.radix {

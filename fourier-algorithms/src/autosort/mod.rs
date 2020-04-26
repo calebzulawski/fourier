@@ -1,3 +1,4 @@
+//! Implementation of a mixed-radix Stockham autosort FFT.
 #![allow(unused_unsafe)]
 #![allow(unused_macros)]
 
@@ -7,7 +8,7 @@ mod butterfly;
 mod avx_optimization;
 
 use crate::fft::{Fft, Transform};
-use crate::float::FftFloat;
+use crate::float::Float;
 use crate::twiddle::compute_twiddle;
 use core::cell::RefCell;
 use core::marker::PhantomData;
@@ -27,7 +28,7 @@ pub struct StepParameters {
 }
 
 impl StepParameters {
-    fn initialize_twiddles<T: FftFloat>(
+    fn initialize_twiddles<T: Float>(
         &self,
         forward: &mut [Complex<T>],
         inverse: &mut [Complex<T>],
@@ -139,7 +140,14 @@ impl<T> Step<T> {
     }
 }
 
-impl Step<f32> {
+/// Constructs a step from parameters and a twiddle offset.
+///
+/// This trait exists to specialize construction of `Step`
+pub trait StepInit {
+    fn new(parameters: StepParameters, twiddle_offset: usize) -> Self;
+}
+
+impl StepInit for Step<f32> {
     fn new(parameters: StepParameters, twiddle_offset: usize) -> Self {
         assert!(parameters.size % parameters.radix == 0);
 
@@ -239,6 +247,106 @@ impl Step<f32> {
     }
 }
 
+impl StepInit for Step<f64> {
+    fn new(parameters: StepParameters, twiddle_offset: usize) -> Self {
+        assert!(parameters.size % parameters.radix == 0);
+
+        // AVX wide implementations
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if parameters.stride <= safe_simd::x86::avx::Vcf64::width()
+                && safe_simd::x86::avx::Avx::new().is_some()
+            {
+                let func: StepFn<f64> = match parameters.radix {
+                    2 => butterfly::radix2_wide_f64_avx_version,
+                    3 => butterfly::radix3_wide_f64_avx_version,
+                    4 => butterfly::radix4_wide_f64_avx_version,
+                    8 => butterfly::radix8_wide_f64_avx_version,
+                    radix => panic!("invalid radix: {}", radix),
+                };
+                return Self {
+                    parameters,
+                    func,
+                    twiddle_offset,
+                };
+            };
+        }
+
+        // SSE wide implementations
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if parameters.stride <= safe_simd::x86::sse::Vcf64::width()
+                && safe_simd::x86::sse::Sse::new().is_some()
+            {
+                let func: StepFn<f64> = match parameters.radix {
+                    2 => butterfly::radix2_wide_f64_sse3_version,
+                    3 => butterfly::radix3_wide_f64_sse3_version,
+                    4 => butterfly::radix4_wide_f64_sse3_version,
+                    8 => butterfly::radix8_wide_f64_sse3_version,
+                    radix => panic!("invalid radix: {}", radix),
+                };
+                return Self {
+                    parameters,
+                    func,
+                    twiddle_offset,
+                };
+            };
+        }
+
+        // AVX narrow implementations
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if safe_simd::x86::avx::Avx::new().is_some() {
+                let func: StepFn<f64> = match parameters.radix {
+                    2 => butterfly::radix2_narrow_f64_avx_version,
+                    3 => butterfly::radix3_narrow_f64_avx_version,
+                    4 => butterfly::radix4_narrow_f64_avx_version,
+                    8 => butterfly::radix8_narrow_f64_avx_version,
+                    radix => panic!("invalid radix: {}", radix),
+                };
+                return Self {
+                    parameters,
+                    func,
+                    twiddle_offset,
+                };
+            };
+        }
+
+        // SSE narrow implementations
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if safe_simd::x86::sse::Sse::new().is_some() {
+                let func: StepFn<f64> = match parameters.radix {
+                    2 => butterfly::radix2_narrow_f64_sse3_version,
+                    3 => butterfly::radix3_narrow_f64_sse3_version,
+                    4 => butterfly::radix4_narrow_f64_sse3_version,
+                    8 => butterfly::radix8_narrow_f64_sse3_version,
+                    radix => panic!("invalid radix: {}", radix),
+                };
+                return Self {
+                    parameters,
+                    func,
+                    twiddle_offset,
+                };
+            };
+        }
+
+        // Generic implementations
+        let func: StepFn<f64> = match parameters.radix {
+            2 => butterfly::radix2_narrow_f64_default_version,
+            3 => butterfly::radix3_narrow_f64_default_version,
+            4 => butterfly::radix4_narrow_f64_default_version,
+            8 => butterfly::radix8_narrow_f64_default_version,
+            radix => panic!("invalid radix: {}", radix),
+        };
+        Self {
+            parameters,
+            func,
+            twiddle_offset,
+        }
+    }
+}
+
 /// Implements a mixed-radix Stockham autosort algorithm for multiples of 2 and 3.
 pub struct Autosort<T, Steps, Twiddles, Work> {
     size: usize,
@@ -250,14 +358,15 @@ pub struct Autosort<T, Steps, Twiddles, Work> {
 
 impl<T, Steps, Twiddles, Work> Autosort<T, Steps, Twiddles, Work>
 where
-    T: FftFloat,
+    T: Float,
     Twiddles: AsMut<[Complex<T>]>,
     Steps: AsMut<[Step<T>]>,
     Work: AsMut<[Step<T>]>,
+    Step<T>: StepInit,
 {
     /// Constructs an FFT from parameters.
     ///
-    /// * `steps` must be the same size as `parameters
+    /// * `steps` must be the same size as `parameters`
     /// * `twiddles` must be large enough to store all twiddles (as determined by `num_twiddles`)
     /// * `work` must be the same size as the FFT size
     pub fn new_from_parameters<F>(
@@ -265,7 +374,6 @@ where
         mut steps: Steps,
         mut twiddles: (Twiddles, Twiddles),
         mut work: Work,
-        step_init: F,
     ) -> Self
     where
         F: Fn(StepParameters, usize) -> Step<T>,
@@ -283,7 +391,7 @@ where
             );
 
             // initialize step
-            steps.as_mut()[index] = step_init(*step, twiddle_offset);
+            steps.as_mut()[index] = Step::new(*step, twiddle_offset);
 
             // advance twiddles
             twiddle_offset += step.size;
@@ -300,7 +408,7 @@ where
 
 impl<T, Steps, Twiddles, Work> Fft for Autosort<T, Steps, Twiddles, Work>
 where
-    T: FftFloat,
+    T: Float,
     Twiddles: AsRef<[Complex<T>]>,
     Steps: AsRef<[Step<T>]>,
     Work: AsMut<[Complex<T>]>,

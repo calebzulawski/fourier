@@ -1,4 +1,5 @@
-use crate::{Autosort, Fft, FftFloat, Transform};
+//! Implementation of Bluestein's FFT algorithm.
+use crate::{autosort::Autosort, Fft, Float, Transform};
 use core::cell::RefCell;
 use core::marker::PhantomData;
 use num_complex::Complex;
@@ -6,7 +7,7 @@ use num_complex::Complex;
 #[cfg(not(feature = "std"))]
 use num_traits::Float as _; // enable sqrt, powi without std
 
-fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
+fn compute_half_twiddle<T: Float>(index: f64, size: usize) -> Complex<T> {
     let theta = index * core::f64::consts::PI / size as f64;
     Complex::new(
         T::from_f64(theta.cos()).unwrap(),
@@ -15,16 +16,14 @@ fn compute_half_twiddle<T: FftFloat>(index: f64, size: usize) -> Complex<T> {
 }
 
 /// Initialize the "w" twiddles.
-fn initialize_w_twiddles<
-    T: FftFloat,
-    E: Extend<Complex<T>> + AsMut<[Complex<T>]>,
-    F: Fft<Real = T>,
->(
+fn initialize_w_twiddles<T: Float, F: Fft<Real = T>>(
     size: usize,
     fft: &F,
-    forward_twiddles: &mut E,
-    inverse_twiddles: &mut E,
+    forward_twiddles: &mut [Complex<T>],
+    inverse_twiddles: &mut [Complex<T>],
 ) {
+    assert_eq!(forward_twiddles.len(), fft.size());
+    assert_eq!(inverse_twiddles.len(), fft.size());
     for i in 0..fft.size() {
         if let Some(index) = {
             if i < size {
@@ -36,30 +35,33 @@ fn initialize_w_twiddles<
             }
         } {
             let twiddle = compute_half_twiddle(index, size);
-            forward_twiddles.extend(core::iter::once(twiddle.conj()));
-            inverse_twiddles.extend(core::iter::once(twiddle));
+            forward_twiddles[i] = twiddle.conj();
+            inverse_twiddles[i] = twiddle;
         } else {
-            forward_twiddles.extend(core::iter::once(Complex::default()));
-            inverse_twiddles.extend(core::iter::once(Complex::default()));
+            forward_twiddles[i] = Complex::default();
+            inverse_twiddles[i] = Complex::default();
         }
     }
-    fft.fft_in_place(forward_twiddles.as_mut());
-    fft.fft_in_place(inverse_twiddles.as_mut());
+    fft.fft_in_place(forward_twiddles);
+    fft.fft_in_place(inverse_twiddles);
 }
 
 /// Initialize the "x" twiddles.
-fn initialize_x_twiddles<T: FftFloat, E: Extend<Complex<T>>>(
+fn initialize_x_twiddles<T: Float>(
     size: usize,
-    forward_twiddles: &mut E,
-    inverse_twiddles: &mut E,
+    forward_twiddles: &mut [Complex<T>],
+    inverse_twiddles: &mut [Complex<T>],
 ) {
+    assert_eq!(forward_twiddles.len(), size);
+    assert_eq!(inverse_twiddles.len(), size);
     for i in 0..size {
         let twiddle = compute_half_twiddle(-(i as f64).powi(2), size);
-        forward_twiddles.extend(core::iter::once(twiddle.conj()));
-        inverse_twiddles.extend(core::iter::once(twiddle));
+        forward_twiddles[i] = twiddle.conj();
+        inverse_twiddles[i] = twiddle;
     }
 }
 
+/*
 /// Implements Bluestein's algorithm for arbitrary FFT sizes.
 pub struct Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work> {
     size: usize,
@@ -98,7 +100,7 @@ impl<T, InnerFft, WTwiddles, XTwiddles, Work> Bluesteins<T, InnerFft, WTwiddles,
 }
 
 impl<
-        T: FftFloat,
+        T: Float,
         InnerFft: Fft<Real = T>,
         WTwiddles: Default + Extend<Complex<T>> + AsMut<[Complex<T>]>,
         XTwiddles: Default + Extend<Complex<T>>,
@@ -131,7 +133,7 @@ impl<
 }
 
 impl<
-        T: FftFloat,
+        T: Float,
         InnerFft: Fft<Real = T>,
         WTwiddles: AsRef<[Complex<T>]>,
         XTwiddles: AsRef<[Complex<T>]>,
@@ -215,7 +217,7 @@ implement! { f64 }
 #[multiversion::multiversion]
 #[clone(target = "[x86|x86_64]+avx")]
 #[inline]
-fn apply<T: FftFloat, F: Fft<Real = T>>(
+fn apply<T: Float, F: Fft<Real = T>>(
     input: &mut [Complex<T>],
     work: &mut [Complex<T>],
     x: &[Complex<T>],
@@ -257,3 +259,4 @@ fn apply<T: FftFloat, F: Fft<Real = T>>(
         }
     }
 }
+*/

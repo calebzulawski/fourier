@@ -8,12 +8,10 @@ mod twiddle;
 #[macro_use]
 mod vector;
 
-mod autosort;
-//mod bluesteins;
+pub mod autosort;
+pub mod bluesteins;
 mod fft;
 mod float;
 
-pub use autosort::*;
-//pub use bluesteins::*;
 pub use fft::*;
 pub use float::*;

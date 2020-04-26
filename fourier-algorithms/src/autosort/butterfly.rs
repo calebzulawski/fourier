@@ -1,7 +1,7 @@
-use crate::float::FftFloat;
+use crate::float::Float;
 use safe_simd::vector::{Complex, Loader, VectorCore};
 
-pub(crate) trait Butterfly<T: FftFloat, V: Complex<T>> {
+pub(crate) trait Butterfly<T: Float, V: Complex<T>> {
     type Buffer: AsRef<[V]> + AsMut<[V]>;
 
     fn radix() -> usize;
@@ -17,7 +17,7 @@ pub(crate) trait Butterfly<T: FftFloat, V: Complex<T>> {
 
 pub(crate) struct Butterfly2;
 
-impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly2 {
+impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly2 {
     type Buffer = [V; 2];
 
     #[inline(always)]
@@ -42,7 +42,7 @@ impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly2 {
 
 pub(crate) struct Butterfly3;
 
-impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly3 {
+impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly3 {
     type Buffer = [V; 3];
 
     #[inline(always)]
@@ -74,7 +74,7 @@ impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly3 {
 
 pub(crate) struct Butterfly4;
 
-impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly4 {
+impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly4 {
     type Buffer = [V; 4];
 
     #[inline(always)]
@@ -119,7 +119,7 @@ impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly4 {
 
 pub(crate) struct Butterfly8;
 
-impl<T: FftFloat, V: Complex<T>> Butterfly<T, V> for Butterfly8 {
+impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly8 {
     type Buffer = [V; 8];
 
     #[inline(always)]
@@ -179,7 +179,7 @@ pub(crate) fn apply_butterfly<T, L, B>(
     forward: bool,
     wide: bool,
 ) where
-    T: FftFloat,
+    T: Float,
     L: Loader<num_complex::Complex<T>>,
     B: Butterfly<T, L::Vector>,
     L::Vector: Complex<T>,

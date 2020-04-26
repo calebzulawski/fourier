@@ -186,8 +186,13 @@ pub(crate) fn apply_butterfly<T, L, B>(
 {
     let m = size / B::radix();
 
+    assert!(input.len() == size * stride);
+    assert!(output.len() == input.len());
+    assert!(cached_twiddles.len() == size);
+
     // Load twiddle factors
     if wide {
+        assert!(stride >= L::Vector::width());
         let full_count = (stride - 1) / L::Vector::width() * L::Vector::width();
         let final_offset = stride - L::Vector::width();
         for i in 0..m {
@@ -275,18 +280,14 @@ macro_rules! implement {
         $handle:ident, $name:ident, $butterfly:ident
     } => {
         paste::item_with_macros! {
-            implement! { @impl $handle, [<$name _wide_fwd_f32>], $butterfly, f32, true, true }
-            implement! { @impl $handle, [<$name _wide_inv_f32>], $butterfly, f32, true, false }
-            implement! { @impl $handle, [<$name _narrow_fwd_f32>], $butterfly, f32, false, true }
-            implement! { @impl $handle, [<$name _narrow_inv_f32>], $butterfly, f32, false, false }
-            implement! { @impl $handle, [<$name _wide_fwd_f64>], $butterfly, f64, true, true }
-            implement! { @impl $handle, [<$name _wide_inv_f64>], $butterfly, f64, true, false }
-            implement! { @impl $handle, [<$name _narrow_fwd_f64>], $butterfly, f64, false, true }
-            implement! { @impl $handle, [<$name _narrow_inv_f64>], $butterfly, f64, false, false }
+            implement! { @impl $handle, [<$name _wide_f32>], $butterfly, f32, true }
+            implement! { @impl $handle, [<$name _narrow_f32>], $butterfly, f32, false }
+            implement! { @impl $handle, [<$name _wide_f64>], $butterfly, f64, true }
+            implement! { @impl $handle, [<$name _narrow_f64>], $butterfly, f64, false }
         }
     };
     {
-        @impl $handle:ident, $name:ident, $butterfly:ident, $type:ty, $wide:expr, $forward:expr
+        @impl $handle:ident, $name:ident, $butterfly:ident, $type:ty, $wide:expr
     } => {
         #[safe_simd::dispatch($handle)]
         pub(crate) fn $name(
@@ -295,6 +296,7 @@ macro_rules! implement {
             size: usize,
             stride: usize,
             cached_twiddles: &[num_complex::Complex<$type>],
+            forward: bool,
         ) {
             apply_butterfly(
                 $butterfly,
@@ -304,7 +306,7 @@ macro_rules! implement {
                 size,
                 stride,
                 cached_twiddles,
-                $forward,
+                forward,
                 $wide,
             );
         }

@@ -3,6 +3,7 @@
 mod avx_optimization;
 mod butterfly;
 
+use crate::array::Array;
 use crate::fft::{Fft, Transform};
 use crate::float::Float;
 use crate::twiddle::compute_twiddle;
@@ -42,32 +43,29 @@ impl StepParameters {
 }
 
 /// Determines the steps for a particular FFT size.
-///
-/// Requires the `std` or `alloc` features.
-#[cfg(any(feature = "std", feature = "alloc"))]
-pub fn steps(size: usize) -> Option<Vec<StepParameters>> {
-    let mut steps = Vec::new();
+pub fn steps<E: Default + Extend<StepParameters>>(size: usize) -> Option<E> {
+    let mut steps = E::default();
     let mut current_size = size;
     let mut stride = 1;
 
     // First step is radix 4 (helps performance)
     if current_size % 4 == 0 {
-        steps.push(StepParameters {
+        steps.extend(core::iter::once(StepParameters {
             size: current_size,
             radix: 4,
             stride,
-        });
+        }));
         current_size /= 4;
         stride *= 4;
     }
 
     for radix in [8, 4, 3, 2].iter().copied() {
         while current_size % radix == 0 {
-            steps.push(StepParameters {
+            steps.extend(core::iter::once(StepParameters {
                 size: current_size,
                 radix,
                 stride,
-            });
+            }));
             current_size /= radix;
             stride *= radix;
         }
@@ -98,6 +96,7 @@ type StepFn<T> = unsafe fn(
 );
 
 /// An FFT step.
+#[derive(Clone)]
 pub struct Step<T> {
     parameters: StepParameters,
     func: StepFn<T>,
@@ -357,7 +356,7 @@ where
     T: Float,
     Twiddles: AsMut<[Complex<T>]>,
     Steps: AsMut<[Step<T>]>,
-    Work: AsMut<[Step<T>]>,
+    Work: AsMut<[Complex<T>]>,
     Step<T>: StepInit,
 {
     /// Constructs an FFT from parameters.
@@ -365,15 +364,12 @@ where
     /// * `steps` must be the same size as `parameters`
     /// * `twiddles` must be large enough to store all twiddles (as determined by `num_twiddles`)
     /// * `work` must be the same size as the FFT size
-    pub fn new_from_parameters<F>(
+    pub fn new_from_parameters(
         parameters: &[StepParameters],
         mut steps: Steps,
         mut twiddles: (Twiddles, Twiddles),
         mut work: Work,
-    ) -> Self
-    where
-        F: Fn(StepParameters, usize) -> Step<T>,
-    {
+    ) -> Self {
         let size = parameters[0].size;
         assert!(work.as_mut().len() == size);
 
@@ -399,6 +395,53 @@ where
             work: RefCell::new(work),
             real_type: PhantomData,
         }
+    }
+}
+
+impl<T, Steps, Twiddles, Work> Autosort<T, Steps, Twiddles, Work>
+where
+    T: Float,
+    Twiddles: Array<Complex<T>>,
+    Steps: Array<Step<T>>,
+    Work: Array<Complex<T>>,
+    Step<T>: StepInit,
+{
+    /// Constructs an FFT over types that are `Extend`.
+    pub fn new_with_extend<E: Default + Extend<StepParameters> + AsRef<[StepParameters]>>(
+        size: usize,
+    ) -> Option<Self> {
+        if let Some(step_parameters) = steps::<E>(size) {
+            let num_twiddles = num_twiddles(step_parameters.as_ref());
+            let forward_twiddles = Twiddles::new(num_twiddles);
+            let inverse_twiddles = Twiddles::new(num_twiddles);
+            let steps = Steps::new(step_parameters.as_ref().len());
+            let work = Work::new(size);
+            Some(Self::new_from_parameters(
+                step_parameters.as_ref(),
+                steps,
+                (forward_twiddles, inverse_twiddles),
+                work,
+            ))
+        } else {
+            None
+        }
+    }
+}
+
+/// Implementation of the Stockham autosort algorithm backed by heap allocations.
+///
+/// Requires the `std` or `alloc` features.
+#[cfg(any(feature = "std", feature = "alloc"))]
+pub type HeapAutosort<T> = Autosort<T, Box<[Step<T>]>, Box<[Complex<T>]>, Box<[Complex<T>]>>;
+
+#[cfg(any(feature = "std", feature = "alloc"))]
+impl<T: Float> HeapAutosort<T>
+where
+    Step<T>: StepInit,
+{
+    /// Constructs a Stockham autosort FFT with the specified size.
+    pub fn new(size: usize) -> Option<Self> {
+        Self::new_with_extend::<Vec<_>>(size)
     }
 }
 

@@ -5,10 +5,12 @@
 
 mod twiddle;
 
+mod array;
 pub mod autosort;
 pub mod bluesteins;
 mod fft;
 mod float;
 
+pub use array::*;
 pub use fft::*;
 pub use float::*;

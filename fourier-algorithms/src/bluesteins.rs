@@ -1,5 +1,5 @@
 //! Implementation of Bluestein's FFT algorithm.
-use crate::{Fft, Float, Transform};
+use crate::{array::Array, autosort::Autosort, Fft, Float, Transform};
 use core::cell::RefCell;
 use core::marker::PhantomData;
 use num_complex::Complex;
@@ -78,13 +78,13 @@ pub fn inner_fft_size(size: usize) -> usize {
     (2 * size - 1).checked_next_power_of_two().unwrap()
 }
 
-impl<
-        T: Float,
-        InnerFft: Fft<Real = T>,
-        WTwiddles: AsMut<[Complex<T>]>,
-        XTwiddles: AsMut<[Complex<T>]>,
-        Work: AsMut<[Complex<T>]>,
-    > Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
+impl<T, InnerFft, WTwiddles, XTwiddles, Work> Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
+where
+    T: Float,
+    InnerFft: Fft<Real = T>,
+    WTwiddles: AsMut<[Complex<T>]>,
+    XTwiddles: AsMut<[Complex<T>]>,
+    Work: AsMut<[Complex<T>]>,
 {
     /// Create a new Bluestein's algorithm generator.
     pub fn new_with_fft(
@@ -112,13 +112,14 @@ impl<
     }
 }
 
-impl<
-        T: Float,
-        InnerFft: Fft<Real = T>,
-        WTwiddles: AsRef<[Complex<T>]>,
-        XTwiddles: AsRef<[Complex<T>]>,
-        Work: AsMut<[Complex<T>]>,
-    > Fft for Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
+impl<T, InnerFft, WTwiddles, XTwiddles, Work> Fft
+    for Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
+where
+    T: Float,
+    InnerFft: Fft<Real = T>,
+    WTwiddles: AsRef<[Complex<T>]>,
+    XTwiddles: AsRef<[Complex<T>]>,
+    Work: AsMut<[Complex<T>]>,
 {
     type Real = T;
 
@@ -141,6 +142,68 @@ impl<
             &self.inner_fft,
             transform,
         );
+    }
+}
+
+impl<T, WTwiddles, XTwiddles, Work, AutosortSteps, AutosortTwiddles, AutosortWork>
+    Bluesteins<
+        T,
+        Autosort<T, AutosortSteps, AutosortTwiddles, AutosortWork>,
+        WTwiddles,
+        XTwiddles,
+        Work,
+    >
+where
+    T: Float,
+    WTwiddles: Array<Complex<T>>,
+    XTwiddles: Array<Complex<T>>,
+    Work: Array<Complex<T>>,
+    AutosortSteps: Array<crate::autosort::Step<T>>,
+    AutosortTwiddles: Array<Complex<T>>,
+    AutosortWork: Array<Complex<T>>,
+    crate::autosort::Step<T>: crate::autosort::StepInit,
+{
+    /// Constructs an FFT over types that are `Extend`.
+    fn new_with_extend<AutosortStepParameters>(size: usize) -> Self
+    where
+        AutosortStepParameters: Default
+            + Extend<crate::autosort::StepParameters>
+            + AsRef<[crate::autosort::StepParameters]>,
+    {
+        let inner_fft_size = inner_fft_size(size);
+        let inner_fft = Autosort::new_with_extend::<AutosortStepParameters>(inner_fft_size);
+        Self::new_with_fft(
+            size,
+            inner_fft.unwrap(),
+            Array::new(inner_fft_size),
+            Array::new(inner_fft_size),
+            Array::new(size),
+            Array::new(size),
+            Array::new(size),
+        )
+    }
+}
+
+/// Implementation of Bluestein's algorithm backed by heap allocations.
+///
+/// Requires the `std` or `alloc` features.
+#[cfg(any(feature = "std", feature = "alloc"))]
+type HeapBluesteins<T> = Bluesteins<
+    T,
+    Autosort<T, Box<[crate::autosort::Step<T>]>, Box<[Complex<T>]>, Box<[Complex<T>]>>,
+    Box<[Complex<T>]>,
+    Box<[Complex<T>]>,
+    Box<[Complex<T>]>,
+>;
+
+#[cfg(any(feature = "std", feature = "alloc"))]
+impl<T: Float> HeapBluesteins<T>
+where
+    crate::autosort::Step<T>: crate::autosort::StepInit,
+{
+    /// Constructs a Bluestein's FFT with the specified size.
+    pub fn new(size: usize) -> Self {
+        Self::new_with_extend::<Vec<_>>(size)
     }
 }
 

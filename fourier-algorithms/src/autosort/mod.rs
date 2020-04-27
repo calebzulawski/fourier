@@ -13,8 +13,11 @@ use num_complex::Complex;
 use num_traits::One as _;
 use safe_simd::vector::{Feature, VectorCore};
 
-#[cfg(not(feature = "std"))]
-use num_traits::Float as _; // enable sqrt without std
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+extern crate alloc;
+
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{boxed::Box, vec::Vec};
 
 /// Represents the parameters of a single FFT step
 #[derive(Copy, Clone, Default)]

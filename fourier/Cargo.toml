@@ -23,7 +23,7 @@ keywords = ["fft", "fourier", "transform"]
 default = ["std"]
 #std = ["fourier-algorithms/std", "fourier-macros/std"]
 std = ["fourier-algorithms/std"]
-alloc = []
+alloc = ["fourier-algorithms/alloc"]
 
 [dependencies]
 fourier-algorithms = { path = "../fourier-algorithms", version = "0.1.0", default-features = false }

@@ -1,3 +1,9 @@
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+extern crate alloc;
+
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{boxed::Box, vec};
+
 pub trait Array<T>: AsRef<[T]> + AsMut<[T]> {
     fn new(size: usize) -> Self;
 }

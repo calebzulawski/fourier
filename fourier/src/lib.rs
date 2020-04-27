@@ -19,7 +19,7 @@
 extern crate alloc;
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::boxed::Box;
 
 pub use fourier_algorithms::{Fft, Transform};
 //pub use fourier_macros::static_fft;

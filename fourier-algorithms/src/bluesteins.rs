@@ -7,6 +7,12 @@ use num_complex::Complex;
 #[cfg(not(feature = "std"))]
 use num_traits::Float as _; // enable sqrt, powi without std
 
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+extern crate alloc;
+
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{boxed::Box, vec::Vec};
+
 fn compute_half_twiddle<T: Float>(index: f64, size: usize) -> Complex<T> {
     let theta = index * core::f64::consts::PI / size as f64;
     Complex::new(

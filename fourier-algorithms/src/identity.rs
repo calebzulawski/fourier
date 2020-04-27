@@ -9,6 +9,12 @@ pub struct Identity<T> {
     phantom_data: core::marker::PhantomData<T>,
 }
 
+impl<T> core::fmt::Debug for Identity<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        write!(f, "Identity")
+    }
+}
+
 impl<T> Fft for Identity<T>
 where
     T: Copy,

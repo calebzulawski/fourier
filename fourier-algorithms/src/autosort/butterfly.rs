@@ -63,7 +63,7 @@ impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly3 {
     ) -> Self::Buffer {
         let t = crate::twiddle::compute_twiddle(1, 3, forward);
         let twiddle = handle.splat(t);
-        let twiddle_conj = handle.splat(t);
+        let twiddle_conj = handle.splat(t.conj());
         [
             input[0] + input[1] + input[2],
             input[0] + input[1] * twiddle + input[2] * twiddle_conj,
@@ -186,9 +186,9 @@ pub(crate) fn apply_butterfly<T, L, B>(
 {
     let m = size / B::radix();
 
-    assert!(input.len() == size * stride);
-    assert!(output.len() == input.len());
-    assert!(cached_twiddles.len() == size);
+    assert_eq!(input.len(), size * stride);
+    assert_eq!(output.len(), input.len());
+    assert_eq!(cached_twiddles.len(), size);
 
     // Load twiddle factors
     if wide {

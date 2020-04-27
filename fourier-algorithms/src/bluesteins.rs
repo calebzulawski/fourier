@@ -73,6 +73,19 @@ pub struct Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work> {
     real_type: PhantomData<T>,
 }
 
+impl<T, InnerFft, WTwiddles, XTwiddles, Work> core::fmt::Debug
+    for Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
+where
+    InnerFft: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        f.debug_struct("Bluesteins")
+            .field("size", &self.size)
+            .field("inner_fft", &self.inner_fft)
+            .finish()
+    }
+}
+
 /// Returns the size of the inner FFT required for Bluestein's FFT.
 pub fn inner_fft_size(size: usize) -> usize {
     (2 * size - 1).checked_next_power_of_two().unwrap()
@@ -179,7 +192,7 @@ where
             Array::new(inner_fft_size),
             Array::new(size),
             Array::new(size),
-            Array::new(size),
+            Array::new(inner_fft_size),
         )
     }
 }

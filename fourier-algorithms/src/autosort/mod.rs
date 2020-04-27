@@ -113,6 +113,16 @@ impl<T> Default for Step<T> {
     }
 }
 
+impl<T> core::fmt::Debug for Step<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        write!(
+            f,
+            "(radix: {}, size: {}, stride: {})",
+            self.parameters.radix, self.parameters.size, self.parameters.stride
+        )
+    }
+}
+
 impl<T> Step<T> {
     fn apply(
         &self,
@@ -121,7 +131,7 @@ impl<T> Step<T> {
         twiddles: &[Complex<T>],
         forward: bool,
     ) {
-        let twiddles = &twiddles[self.twiddle_offset..];
+        let twiddles = &twiddles[self.twiddle_offset..(self.twiddle_offset + self.parameters.size)];
         unsafe {
             (self.func)(
                 input,
@@ -351,6 +361,18 @@ pub struct Autosort<T, Steps, Twiddles, Work> {
     real_type: PhantomData<T>,
 }
 
+impl<T, Steps, Twiddles, Work> core::fmt::Debug for Autosort<T, Steps, Twiddles, Work>
+where
+    Steps: AsRef<[Step<T>]>,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        f.debug_struct("Autosort")
+            .field("size", &self.size)
+            .field("steps", &self.steps.as_ref())
+            .finish()
+    }
+}
+
 impl<T, Steps, Twiddles, Work> Autosort<T, Steps, Twiddles, Work>
 where
     T: Float,
@@ -459,6 +481,8 @@ where
     }
 
     fn transform_in_place(&self, input: &mut [Complex<T>], transform: Transform) {
+        assert_eq!(input.len(), self.size);
+
         // Obtain the work buffer
         let mut work_ref = self.work.borrow_mut();
         let work = work_ref.as_mut();

@@ -37,7 +37,7 @@ impl Transform {
 }
 
 /// The interface for performing FFTs.
-pub trait Fft {
+pub trait Fft: core::fmt::Debug {
     /// The real type used by the FFT.
     type Real: Copy;
 

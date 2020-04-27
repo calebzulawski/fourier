@@ -176,11 +176,12 @@ macro_rules! generate_test {
                 idft::<$type>
             };
             for size in 1..MAX_SIZE {
-                println!("SIZE: {}", size);
                 let fft = fourier::$fft_gen(size);
+                println!("SIZE: {}", size);
+                println!("{:#?}", fft);
                 fft.transform(&input[0..size], &mut fft_output[0..size], transform);
                 reference(&input[0..size], &mut dft_output[0..size]);
-                $comparison(&dft_output[0..size], &fft_output[0..size]);
+                $comparison(&fft_output[0..size], &dft_output[0..size]);
             }
         }
     }
@@ -226,7 +227,7 @@ macro_rules! generate_static_test {
             };
             fft.transform(&input, &mut fft_output, transform);
             reference(&input, &mut dft_output);
-            $comparison(&dft_output, &fft_output);
+            $comparison(&fft_output, &dft_output);
         }
     }
 }

@@ -32,11 +32,11 @@ impl StepParameters {
     ) {
         let m = self.size / self.radix;
         for i in 0..m {
-            forward[0] = Complex::one();
-            inverse[0] = Complex::one();
+            forward[i * self.radix] = Complex::one();
+            inverse[i * self.radix] = Complex::one();
             for j in 1..self.radix {
-                forward[j] = compute_twiddle(i * j, self.size, true);
-                inverse[j] = compute_twiddle(i * j, self.size, false);
+                forward[i * self.radix + j] = compute_twiddle(i * j, self.size, true);
+                inverse[i * self.radix + j] = compute_twiddle(i * j, self.size, false);
             }
         }
     }

@@ -156,6 +156,18 @@ impl StepInit for Step<f32> {
     fn new(parameters: StepParameters, twiddle_offset: usize) -> Self {
         assert!(parameters.size % parameters.radix == 0);
 
+        // Optimization
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if parameters.stride == 1 && parameters.radix == 4 {
+                return Self {
+                    parameters,
+                    func: crate::autosort::avx_optimization::radix_4_stride_1_avx_f32,
+                    twiddle_offset,
+                };
+            }
+        }
+
         // AVX wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {

@@ -27,10 +27,12 @@ unsafe fn cmul_f64(a: __m256d, b: __m256d) -> __m256d {
 pub(crate) unsafe fn radix_4_stride_1_avx_f32(
     input: &[num_complex::Complex<f32>],
     output: &mut [num_complex::Complex<f32>],
-    forward: bool,
     size: usize,
+    stride: usize,
     twiddles: &[num_complex::Complex<f32>],
+    forward: bool,
 ) {
+    assert_eq!(stride, 1);
     const RADIX: usize = 4;
     let m = size / RADIX;
 

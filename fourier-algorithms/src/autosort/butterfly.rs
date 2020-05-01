@@ -181,6 +181,7 @@ pub(crate) fn apply_butterfly<T, F, B>(
         assert!(stride >= F::Widest::WIDTH);
         let full_count = (stride - 1) / F::Widest::WIDTH * F::Widest::WIDTH;
         let final_offset = stride - F::Widest::WIDTH;
+        let input_vectors = feature.overlapping_widest(input);
         for i in 0..m {
             let twiddles = {
                 let mut twiddles = B::make_buffer(feature);
@@ -199,10 +200,9 @@ pub(crate) fn apply_butterfly<T, F, B>(
             {
                 // Load full vectors
                 let mut scratch = B::make_buffer(feature);
-                let load = unsafe { input.as_ptr().add(j + stride * i) };
                 for k in 0..B::radix() {
                     scratch.as_mut()[k] =
-                        unsafe { F::Widest::read_ptr(feature, load.add(stride * k * m)) };
+                        unsafe { input_vectors.get_unchecked(j + stride * (i + k * m)) };
                 }
 
                 // Butterfly with optional twiddles

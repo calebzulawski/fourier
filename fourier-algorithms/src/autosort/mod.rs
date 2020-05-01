@@ -11,7 +11,7 @@ use core::cell::RefCell;
 use core::marker::PhantomData;
 use num_complex::Complex;
 use num_traits::One as _;
-use safe_simd::vector::{Feature, VectorCore};
+use safe_simd::vector::{FeatureDetect, Vector, Widest};
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
@@ -162,7 +162,10 @@ impl StepInit for Step<f32> {
         // Optimization
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride == 1 && parameters.radix == 4 {
+            if parameters.stride == 1
+                && parameters.radix == 4
+                && safe_simd::x86::Avx::detect().is_some()
+            {
                 return Self {
                     parameters,
                     func: crate::autosort::avx_optimization::radix_4_stride_1_avx_f32,
@@ -174,8 +177,9 @@ impl StepInit for Step<f32> {
         // AVX wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride >= safe_simd::x86::avx::Vcf32::width()
-                && safe_simd::x86::avx::Avx::new().is_some()
+            if parameters.stride
+                >= <safe_simd::x86::Avx as Widest<num_complex::Complex<f32>>>::Widest::WIDTH
+                && safe_simd::x86::Avx::detect().is_some()
             {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_wide_f32_avx_version,
@@ -195,8 +199,9 @@ impl StepInit for Step<f32> {
         // SSE wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride >= safe_simd::x86::sse::Vcf32::width()
-                && safe_simd::x86::sse::Sse::new().is_some()
+            if parameters.stride
+                >= <safe_simd::x86::Sse as Widest<num_complex::Complex<f32>>>::Widest::WIDTH
+                && safe_simd::x86::Sse::detect().is_some()
             {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_wide_f32_sse3_version,
@@ -216,7 +221,7 @@ impl StepInit for Step<f32> {
         // AVX narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::avx::Avx::new().is_some() {
+            if safe_simd::x86::Avx::detect().is_some() {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f32_avx_version,
                     3 => butterfly::radix3_narrow_f32_avx_version,
@@ -235,7 +240,7 @@ impl StepInit for Step<f32> {
         // SSE narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::sse::Sse::new().is_some() {
+            if safe_simd::x86::Sse::detect().is_some() {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f32_sse3_version,
                     3 => butterfly::radix3_narrow_f32_sse3_version,
@@ -274,8 +279,9 @@ impl StepInit for Step<f64> {
         // AVX wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride >= safe_simd::x86::avx::Vcf64::width()
-                && safe_simd::x86::avx::Avx::new().is_some()
+            if parameters.stride
+                >= <safe_simd::x86::Avx as Widest<num_complex::Complex<f64>>>::Widest::WIDTH
+                && safe_simd::x86::Avx::detect().is_some()
             {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_wide_f64_avx_version,
@@ -295,8 +301,9 @@ impl StepInit for Step<f64> {
         // SSE wide implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if parameters.stride >= safe_simd::x86::sse::Vcf64::width()
-                && safe_simd::x86::sse::Sse::new().is_some()
+            if parameters.stride
+                >= <safe_simd::x86::Sse as Widest<num_complex::Complex<f64>>>::Widest::WIDTH
+                && safe_simd::x86::Sse::detect().is_some()
             {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_wide_f64_sse3_version,
@@ -316,7 +323,7 @@ impl StepInit for Step<f64> {
         // AVX narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::avx::Avx::new().is_some() {
+            if safe_simd::x86::Avx::detect().is_some() {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f64_avx_version,
                     3 => butterfly::radix3_narrow_f64_avx_version,
@@ -335,7 +342,7 @@ impl StepInit for Step<f64> {
         // SSE narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::sse::Sse::new().is_some() {
+            if safe_simd::x86::Sse::detect().is_some() {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f64_sse3_version,
                     3 => butterfly::radix3_narrow_f64_sse3_version,

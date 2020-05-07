@@ -11,6 +11,7 @@ pub mod bluesteins;
 mod fft;
 mod float;
 pub mod identity;
+pub mod split_radix;
 
 pub use array::*;
 pub use fft::*;

@@ -31,9 +31,12 @@ pub use fourier_algorithms::{Fft, Transform};
 pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
     use fourier_algorithms::{
         autosort::HeapAutosort, bluesteins::HeapBluesteins, identity::Identity,
+        split_radix::HeapSplitRadix,
     };
     if size == 1 {
         Box::new(Identity::default())
+    } else if let Some(fft) = HeapSplitRadix::new(size) {
+        Box::new(fft)
     } else if let Some(fft) = HeapAutosort::new(size) {
         Box::new(fft)
     } else {
@@ -48,9 +51,12 @@ pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
 pub fn create_fft_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
     use fourier_algorithms::{
         autosort::HeapAutosort, bluesteins::HeapBluesteins, identity::Identity,
+        split_radix::HeapSplitRadix,
     };
     if size == 1 {
         Box::new(Identity::default())
+    } else if let Some(fft) = HeapSplitRadix::new(size) {
+        Box::new(fft)
     } else if let Some(fft) = HeapAutosort::new(size) {
         Box::new(fft)
     } else {

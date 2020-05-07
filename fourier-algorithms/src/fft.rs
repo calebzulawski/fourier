@@ -17,6 +17,7 @@ pub enum Transform {
 
 impl Transform {
     /// Returns true if the transform is a forward transform.
+    #[inline]
     pub fn is_forward(&self) -> bool {
         match self {
             Self::Fft | Self::SqrtScaledFft => true,
@@ -25,6 +26,7 @@ impl Transform {
     }
 
     /// Returns the inverse transform, or `None` for `UnscaledIfft`.
+    #[inline]
     pub fn inverse(&self) -> Option<Self> {
         match self {
             Self::Fft => Some(Self::Ifft),

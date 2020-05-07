@@ -176,8 +176,8 @@ macro_rules! generate_test {
                 idft::<$type>
             };
             for size in 1..MAX_SIZE {
-                let fft = fourier::$fft_gen(size);
                 println!("SIZE: {}", size);
+                let fft = fourier::$fft_gen(size);
                 println!("{:#?}", fft);
                 fft.transform(&input[0..size], &mut fft_output[0..size], transform);
                 reference(&input[0..size], &mut dft_output[0..size]);

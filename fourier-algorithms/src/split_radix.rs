@@ -23,6 +23,27 @@ fn split_radix<T: Float>(
         let b = input[offset.overflowing_add(stride).0 & max_size_mask];
         output[0] = a + b;
         output[1] = a - b;
+    } else if size == 4 {
+        let x0 = input[offset & max_size_mask];
+        let x1 = input[offset.overflowing_add(stride).0 & max_size_mask];
+        let x2 = input[offset.overflowing_add(2 * stride).0 & max_size_mask];
+        let x3 = input[offset.overflowing_add(3 * stride).0 & max_size_mask];
+
+        let y0 = x0 + x2;
+        let y1 = x0 - x2;
+        let y2 = x1 + x3;
+        let y3 = x1 - x3;
+
+        let y3 = if forward {
+            Complex::new(-y3.im, y3.re)
+        } else {
+            Complex::new(y3.im, -y3.re)
+        };
+
+        output[0] = y0 + y2;
+        output[1] = y1 - y3;
+        output[2] = y0 - y2;
+        output[3] = y1 + y3;
     } else {
         split_radix(
             input,

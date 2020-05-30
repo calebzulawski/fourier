@@ -7,11 +7,12 @@ use crate::array::Array;
 use crate::fft::{Fft, Transform};
 use crate::float::Float;
 use crate::twiddle::compute_twiddle;
+use arch_types::Features;
 use core::cell::RefCell;
 use core::marker::PhantomData;
-use num_complex::Complex;
+use generic_simd::vector::{Handle, Vector};
+use num_complex as nc;
 use num_traits::One as _;
-use safe_simd::vector::{FeatureDetect, Vector, Widest};
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
@@ -30,13 +31,13 @@ pub struct StepParameters {
 impl StepParameters {
     fn initialize_twiddles<T: Float>(
         &self,
-        forward: &mut [Complex<T>],
-        inverse: &mut [Complex<T>],
+        forward: &mut [nc::Complex<T>],
+        inverse: &mut [nc::Complex<T>],
     ) {
         let m = self.size / self.radix;
         for i in 0..m {
-            forward[i * self.radix] = Complex::one();
-            inverse[i * self.radix] = Complex::one();
+            forward[i * self.radix] = nc::Complex::one();
+            inverse[i * self.radix] = nc::Complex::one();
             for j in 1..self.radix {
                 forward[i * self.radix + j] = compute_twiddle(i * j, self.size, true);
                 inverse[i * self.radix + j] = compute_twiddle(i * j, self.size, false);
@@ -89,14 +90,8 @@ pub fn num_twiddles(steps: &[StepParameters]) -> usize {
     count
 }
 
-type StepFn<T> = unsafe fn(
-    &[num_complex::Complex<T>],
-    &mut [num_complex::Complex<T>],
-    usize,
-    usize,
-    &[num_complex::Complex<T>],
-    bool,
-);
+type StepFn<T> =
+    unsafe fn(&[nc::Complex<T>], &mut [nc::Complex<T>], usize, usize, &[nc::Complex<T>], bool);
 
 /// An FFT step.
 #[derive(Clone)]
@@ -129,9 +124,9 @@ impl<T> core::fmt::Debug for Step<T> {
 impl<T> Step<T> {
     fn apply(
         &self,
-        input: &[Complex<T>],
-        output: &mut [Complex<T>],
-        twiddles: &[Complex<T>],
+        input: &[nc::Complex<T>],
+        output: &mut [nc::Complex<T>],
+        twiddles: &[nc::Complex<T>],
         forward: bool,
     ) {
         let twiddles = &twiddles[self.twiddle_offset..(self.twiddle_offset + self.parameters.size)];
@@ -164,7 +159,7 @@ impl StepInit for Step<f32> {
         {
             if parameters.stride == 1
                 && parameters.radix == 4
-                && safe_simd::x86::Avx::detect().is_some()
+                && generic_simd::arch::x86::Avx::new().is_some()
             {
                 return Self {
                     parameters,
@@ -178,8 +173,8 @@ impl StepInit for Step<f32> {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if parameters.stride
-                >= <safe_simd::x86::Avx as Widest<num_complex::Complex<f32>>>::Widest::WIDTH
-                && safe_simd::x86::Avx::detect().is_some()
+                >= <generic_simd::arch::x86::Avx as Handle<nc::Complex<f32>>>::VectorNative::WIDTH
+                && generic_simd::arch::x86::Avx::new().is_some()
             {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_wide_f32_avx_version,
@@ -200,8 +195,8 @@ impl StepInit for Step<f32> {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if parameters.stride
-                >= <safe_simd::x86::Sse as Widest<num_complex::Complex<f32>>>::Widest::WIDTH
-                && safe_simd::x86::Sse::detect().is_some()
+                >= <generic_simd::arch::x86::Sse as Handle<nc::Complex<f32>>>::VectorNative::WIDTH
+                && generic_simd::arch::x86::Sse::new().is_some()
             {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_wide_f32_sse3_version,
@@ -221,7 +216,7 @@ impl StepInit for Step<f32> {
         // AVX narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::Avx::detect().is_some() {
+            if generic_simd::arch::x86::Avx::new().is_some() {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f32_avx_version,
                     3 => butterfly::radix3_narrow_f32_avx_version,
@@ -240,7 +235,7 @@ impl StepInit for Step<f32> {
         // SSE narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::Sse::detect().is_some() {
+            if generic_simd::arch::x86::Sse::new().is_some() {
                 let func: StepFn<f32> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f32_sse3_version,
                     3 => butterfly::radix3_narrow_f32_sse3_version,
@@ -280,8 +275,8 @@ impl StepInit for Step<f64> {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if parameters.stride
-                >= <safe_simd::x86::Avx as Widest<num_complex::Complex<f64>>>::Widest::WIDTH
-                && safe_simd::x86::Avx::detect().is_some()
+                >= <generic_simd::arch::x86::Avx as Handle<nc::Complex<f64>>>::VectorNative::WIDTH
+                && generic_simd::arch::x86::Avx::new().is_some()
             {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_wide_f64_avx_version,
@@ -302,8 +297,8 @@ impl StepInit for Step<f64> {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if parameters.stride
-                >= <safe_simd::x86::Sse as Widest<num_complex::Complex<f64>>>::Widest::WIDTH
-                && safe_simd::x86::Sse::detect().is_some()
+                >= <generic_simd::arch::x86::Sse as Handle<nc::Complex<f64>>>::VectorNative::WIDTH
+                && generic_simd::arch::x86::Sse::new().is_some()
             {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_wide_f64_sse3_version,
@@ -323,7 +318,7 @@ impl StepInit for Step<f64> {
         // AVX narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::Avx::detect().is_some() {
+            if generic_simd::arch::x86::Avx::new().is_some() {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f64_avx_version,
                     3 => butterfly::radix3_narrow_f64_avx_version,
@@ -342,7 +337,7 @@ impl StepInit for Step<f64> {
         // SSE narrow implementations
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
-            if safe_simd::x86::Sse::detect().is_some() {
+            if generic_simd::arch::x86::Sse::new().is_some() {
                 let func: StepFn<f64> = match parameters.radix {
                     2 => butterfly::radix2_narrow_f64_sse3_version,
                     3 => butterfly::radix3_narrow_f64_sse3_version,
@@ -398,9 +393,9 @@ where
 impl<T, Steps, Twiddles, Work> Autosort<T, Steps, Twiddles, Work>
 where
     T: Float,
-    Twiddles: AsMut<[Complex<T>]>,
+    Twiddles: AsMut<[nc::Complex<T>]>,
     Steps: AsMut<[Step<T>]>,
-    Work: AsMut<[Complex<T>]>,
+    Work: AsMut<[nc::Complex<T>]>,
     Step<T>: StepInit,
 {
     /// Constructs an FFT from parameters.
@@ -445,9 +440,9 @@ where
 impl<T, Steps, Twiddles, Work> Autosort<T, Steps, Twiddles, Work>
 where
     T: Float,
-    Twiddles: Array<Complex<T>>,
+    Twiddles: Array<nc::Complex<T>>,
     Steps: Array<Step<T>>,
-    Work: Array<Complex<T>>,
+    Work: Array<nc::Complex<T>>,
     Step<T>: StepInit,
 {
     /// Constructs an FFT over types that are `Extend`.
@@ -476,7 +471,8 @@ where
 ///
 /// Requires the `std` or `alloc` features.
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub type HeapAutosort<T> = Autosort<T, Box<[Step<T>]>, Box<[Complex<T>]>, Box<[Complex<T>]>>;
+pub type HeapAutosort<T> =
+    Autosort<T, Box<[Step<T>]>, Box<[nc::Complex<T>]>, Box<[nc::Complex<T>]>>;
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 impl<T: Float> HeapAutosort<T>
@@ -492,9 +488,9 @@ where
 impl<T, Steps, Twiddles, Work> Fft for Autosort<T, Steps, Twiddles, Work>
 where
     T: Float,
-    Twiddles: AsRef<[Complex<T>]>,
+    Twiddles: AsRef<[nc::Complex<T>]>,
     Steps: AsRef<[Step<T>]>,
-    Work: AsMut<[Complex<T>]>,
+    Work: AsMut<[nc::Complex<T>]>,
 {
     type Real = T;
 
@@ -502,7 +498,7 @@ where
         self.size
     }
 
-    fn transform_in_place(&self, input: &mut [Complex<T>], transform: Transform) {
+    fn transform_in_place(&self, input: &mut [nc::Complex<T>], transform: Transform) {
         assert_eq!(input.len(), self.size);
 
         // Obtain the work buffer

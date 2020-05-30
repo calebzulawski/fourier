@@ -1,20 +1,25 @@
 use crate::float::Float;
-use safe_simd::vector::{Complex, Vector, Widest};
+use generic_simd::vector;
+use generic_simd::vector::{Complex, Vector};
+use num_complex as nc;
 
-pub(crate) trait Butterfly<T: Float, V: Complex<T>> {
-    type Buffer: AsRef<[V]> + AsMut<[V]>;
+pub(crate) trait Butterfly<T: Float, H: vector::Handle<nc::Complex<T>>> {
+    type Buffer: AsRef<[H::VectorNative]> + AsMut<[H::VectorNative]>;
 
     fn radix() -> usize;
 
-    fn make_buffer(feature: V::Feature) -> Self::Buffer;
+    fn make_buffer(handle: H) -> Self::Buffer;
 
-    fn apply(feature: V::Feature, input: Self::Buffer, forward: bool) -> Self::Buffer;
+    fn apply(handle: H, input: Self::Buffer, forward: bool) -> Self::Buffer;
 }
 
 pub(crate) struct Butterfly2;
 
-impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly2 {
-    type Buffer = [V; 2];
+impl<T: Float, H: vector::Handle<nc::Complex<T>>> Butterfly<T, H> for Butterfly2
+where
+    H::VectorNative: vector::Complex,
+{
+    type Buffer = [H::VectorNative; 2];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -22,22 +27,23 @@ impl<T: Float, V: Complex<T>> Butterfly<T, V> for Butterfly2 {
     }
 
     #[inline(always)]
-    fn make_buffer(feature: V::Feature) -> Self::Buffer {
-        [V::zeroed(feature), V::zeroed(feature)]
+    fn make_buffer(handle: H) -> Self::Buffer {
+        [handle.zeroed_native(); 2]
     }
 
     #[inline(always)]
-    fn apply(_feature: V::Feature, input: Self::Buffer, _forward: bool) -> Self::Buffer {
+    fn apply(_: H, input: Self::Buffer, _: bool) -> Self::Buffer {
         [input[0] + input[1], input[0] - input[1]]
     }
 }
 
 pub(crate) struct Butterfly3;
 
-impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterfly<T, V>
-    for Butterfly3
+impl<T: Float, H: vector::Handle<nc::Complex<T>>> Butterfly<T, H> for Butterfly3
+where
+    H::VectorNative: vector::Complex,
 {
-    type Buffer = [V; 3];
+    type Buffer = [H::VectorNative; 3];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -45,15 +51,15 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
     }
 
     #[inline(always)]
-    fn make_buffer(feature: V::Feature) -> Self::Buffer {
-        [V::zeroed(feature), V::zeroed(feature), V::zeroed(feature)]
+    fn make_buffer(handle: H) -> Self::Buffer {
+        [handle.zeroed_native(); 3]
     }
 
     #[inline(always)]
-    fn apply(feature: V::Feature, input: Self::Buffer, forward: bool) -> Self::Buffer {
+    fn apply(handle: H, input: Self::Buffer, forward: bool) -> Self::Buffer {
         let t = crate::twiddle::compute_twiddle(1, 3, forward);
-        let twiddle = V::splat(feature, t);
-        let twiddle_conj = V::splat(feature, t.conj());
+        let twiddle = handle.splat_native(t);
+        let twiddle_conj = handle.splat_native(t.conj());
         [
             input[0] + input[1] + input[2],
             input[0] + input[1] * twiddle + input[2] * twiddle_conj,
@@ -64,10 +70,11 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
 
 pub(crate) struct Butterfly4;
 
-impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterfly<T, V>
-    for Butterfly4
+impl<T: Float, H: vector::Handle<nc::Complex<T>>> Butterfly<T, H> for Butterfly4
+where
+    H::VectorNative: vector::Complex,
 {
-    type Buffer = [V; 4];
+    type Buffer = [H::VectorNative; 4];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -75,20 +82,15 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
     }
 
     #[inline(always)]
-    fn make_buffer(feature: V::Feature) -> Self::Buffer {
-        [
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-        ]
+    fn make_buffer(handle: H) -> Self::Buffer {
+        [handle.zeroed_native(); 4]
     }
 
     #[inline(always)]
-    fn apply(feature: V::Feature, input: Self::Buffer, forward: bool) -> Self::Buffer {
+    fn apply(handle: H, input: Self::Buffer, forward: bool) -> Self::Buffer {
         let mut a = {
-            let a0 = Butterfly2::apply(feature, [input[0], input[2]], forward);
-            let a1 = Butterfly2::apply(feature, [input[1], input[3]], forward);
+            let a0 = Butterfly2::apply(handle, [input[0], input[2]], forward);
+            let a1 = Butterfly2::apply(handle, [input[1], input[3]], forward);
             [a0[0], a0[1], a1[0], a1[1]]
         };
         a[3] = if forward {
@@ -97,8 +99,8 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
             a[3].mul_neg_i()
         };
         let b = {
-            let b0 = Butterfly2::apply(feature, [a[0], a[2]], forward);
-            let b1 = Butterfly2::apply(feature, [a[1], a[3]], forward);
+            let b0 = Butterfly2::apply(handle, [a[0], a[2]], forward);
+            let b1 = Butterfly2::apply(handle, [a[1], a[3]], forward);
             [b0[0], b0[1], b1[0], b1[1]]
         };
         [b[0], b[3], b[1], b[2]]
@@ -107,10 +109,11 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
 
 pub(crate) struct Butterfly8;
 
-impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterfly<T, V>
-    for Butterfly8
+impl<T: Float, H: vector::Handle<nc::Complex<T>>> Butterfly<T, H> for Butterfly8
+where
+    H::VectorNative: vector::Complex,
 {
-    type Buffer = [V; 8];
+    type Buffer = [H::VectorNative; 8];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -118,26 +121,17 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
     }
 
     #[inline(always)]
-    fn make_buffer(feature: V::Feature) -> Self::Buffer {
-        [
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-            V::zeroed(feature),
-        ]
+    fn make_buffer(handle: H) -> Self::Buffer {
+        [handle.zeroed_native(); 8]
     }
 
     #[inline(always)]
-    fn apply(feature: V::Feature, input: Self::Buffer, forward: bool) -> Self::Buffer {
+    fn apply(handle: H, input: Self::Buffer, forward: bool) -> Self::Buffer {
         let t = crate::twiddle::compute_twiddle(1, 8, forward);
-        let twiddle = V::splat(feature, t);
-        let twiddle_neg = V::splat(feature, num_complex::Complex::new(-t.re, t.im));
-        let a1 = Butterfly4::apply(feature, [input[0], input[2], input[4], input[6]], forward);
-        let mut b1 = Butterfly4::apply(feature, [input[1], input[3], input[5], input[7]], forward);
+        let twiddle = handle.splat_native(t);
+        let twiddle_neg = handle.splat_native(nc::Complex::new(-t.re, t.im));
+        let a1 = Butterfly4::apply(handle, [input[0], input[2], input[4], input[6]], forward);
+        let mut b1 = Butterfly4::apply(handle, [input[1], input[3], input[5], input[7]], forward);
         b1[1] = b1[1] * twiddle;
         b1[2] = if forward {
             b1[2].mul_neg_i()
@@ -145,30 +139,30 @@ impl<T: Float, V: Complex<T> + Vector<Scalar = num_complex::Complex<T>>> Butterf
             b1[2].mul_i()
         };
         b1[3] = b1[3] * twiddle_neg;
-        let a2 = Butterfly2::apply(feature, [a1[0], b1[0]], forward);
-        let b2 = Butterfly2::apply(feature, [a1[1], b1[1]], forward);
-        let c2 = Butterfly2::apply(feature, [a1[2], b1[2]], forward);
-        let d2 = Butterfly2::apply(feature, [a1[3], b1[3]], forward);
+        let a2 = Butterfly2::apply(handle, [a1[0], b1[0]], forward);
+        let b2 = Butterfly2::apply(handle, [a1[1], b1[1]], forward);
+        let c2 = Butterfly2::apply(handle, [a1[2], b1[2]], forward);
+        let d2 = Butterfly2::apply(handle, [a1[3], b1[3]], forward);
         [a2[0], b2[0], c2[0], d2[0], a2[1], b2[1], c2[1], d2[1]]
     }
 }
 
 #[inline(always)]
-pub(crate) fn apply_butterfly<T, F, B>(
+pub(crate) fn apply_butterfly<T, H, B>(
     _butterfly: B,
-    feature: F,
-    input: &[num_complex::Complex<T>],
-    output: &mut [num_complex::Complex<T>],
+    handle: H,
+    input: &[nc::Complex<T>],
+    output: &mut [nc::Complex<T>],
     size: usize,
     stride: usize,
-    cached_twiddles: &[num_complex::Complex<T>],
+    cached_twiddles: &[nc::Complex<T>],
     forward: bool,
     wide: bool,
 ) where
     T: Float,
-    F: Widest<num_complex::Complex<T>>,
-    B: Butterfly<T, F::Widest>,
-    F::Widest: Complex<T>,
+    H: vector::Handle<nc::Complex<T>>,
+    B: Butterfly<T, H>,
+    H::VectorNative: vector::Complex,
 {
     let m = size / B::radix();
 
@@ -178,15 +172,15 @@ pub(crate) fn apply_butterfly<T, F, B>(
 
     // Load twiddle factors
     if wide {
-        assert!(stride >= F::Widest::WIDTH);
-        let full_count = (stride - 1) / F::Widest::WIDTH * F::Widest::WIDTH;
-        let final_offset = stride - F::Widest::WIDTH;
-        let input_vectors = feature.overlapping_widest(input);
+        assert!(stride >= H::VectorNative::WIDTH);
+        let full_count = (stride - 1) / H::VectorNative::WIDTH * H::VectorNative::WIDTH;
+        let final_offset = stride - H::VectorNative::WIDTH;
+        let input_vectors = handle.overlapping_native(input);
         for i in 0..m {
             let twiddles = {
-                let mut twiddles = B::make_buffer(feature);
+                let mut twiddles = B::make_buffer(handle);
                 for k in 1..B::radix() {
-                    twiddles.as_mut()[k] = F::Widest::splat(feature, unsafe {
+                    twiddles.as_mut()[k] = handle.splat_native(unsafe {
                         cached_twiddles.as_ptr().add(i * B::radix() + k).read()
                     });
                 }
@@ -195,18 +189,18 @@ pub(crate) fn apply_butterfly<T, F, B>(
 
             // Loop over full vectors, with a final overlapping vector
             for j in (0..full_count)
-                .step_by(F::Widest::WIDTH)
+                .step_by(H::VectorNative::WIDTH)
                 .chain(core::iter::once(final_offset))
             {
                 // Load full vectors
-                let mut scratch = B::make_buffer(feature);
+                let mut scratch = B::make_buffer(handle);
                 for k in 0..B::radix() {
                     scratch.as_mut()[k] =
                         unsafe { input_vectors.get_unchecked(j + stride * (i + k * m)) };
                 }
 
                 // Butterfly with optional twiddles
-                scratch = B::apply(feature, scratch, forward);
+                scratch = B::apply(handle, scratch, forward);
                 if size != B::radix() {
                     for k in 1..B::radix() {
                         scratch.as_mut()[k] *= twiddles.as_ref()[k];
@@ -223,9 +217,9 @@ pub(crate) fn apply_butterfly<T, F, B>(
     } else {
         for i in 0..m {
             let twiddles = {
-                let mut twiddles = B::make_buffer(feature);
+                let mut twiddles = B::make_buffer(handle);
                 for k in 1..B::radix() {
-                    twiddles.as_mut()[k] = F::Widest::splat(feature, unsafe {
+                    twiddles.as_mut()[k] = handle.splat_native(unsafe {
                         cached_twiddles.as_ptr().add(i * B::radix() + k).read()
                     });
                 }
@@ -236,14 +230,14 @@ pub(crate) fn apply_butterfly<T, F, B>(
             let store = unsafe { output.as_mut_ptr().add(B::radix() * stride * i) };
             for j in 0..stride {
                 // Load a single value
-                let mut scratch = B::make_buffer(feature);
+                let mut scratch = B::make_buffer(handle);
                 for k in 0..B::radix() {
                     scratch.as_mut()[k] =
-                        F::Widest::splat(feature, unsafe { load.add(stride * k * m + j).read() });
+                        handle.splat_native(unsafe { load.add(stride * k * m + j).read() });
                 }
 
                 // Butterfly with optional twiddles
-                scratch = B::apply(feature, scratch, forward);
+                scratch = B::apply(handle, scratch, forward);
                 if size != B::radix() {
                     for k in 1..B::radix() {
                         scratch.as_mut()[k] *= twiddles.as_ref()[k];
@@ -278,13 +272,13 @@ macro_rules! implement {
     {
         @impl $handle:ident, $name:ident, $butterfly:ident, $type:ty, $wide:expr
     } => {
-        #[safe_simd::dispatch($handle)]
+        #[generic_simd::dispatch($handle)]
         pub(crate) fn $name(
-            input: &[num_complex::Complex<$type>],
-            output: &mut [num_complex::Complex<$type>],
+            input: &[nc::Complex<$type>],
+            output: &mut [nc::Complex<$type>],
             size: usize,
             stride: usize,
-            cached_twiddles: &[num_complex::Complex<$type>],
+            cached_twiddles: &[nc::Complex<$type>],
             forward: bool,
         ) {
             apply_butterfly(

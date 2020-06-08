@@ -164,33 +164,20 @@ where
     }
 }
 
-impl<T, WTwiddles, XTwiddles, Work, AutosortSteps, AutosortTwiddles, AutosortWork>
-    Bluesteins<
-        T,
-        Autosort<T, AutosortSteps, AutosortTwiddles, AutosortWork>,
-        WTwiddles,
-        XTwiddles,
-        Work,
-    >
+impl<T, WTwiddles, XTwiddles, Work, AutosortTwiddles, AutosortWork>
+    Bluesteins<T, Autosort<T, AutosortTwiddles, AutosortWork>, WTwiddles, XTwiddles, Work>
 where
     T: Float,
     WTwiddles: Array<Complex<T>>,
     XTwiddles: Array<Complex<T>>,
     Work: Array<Complex<T>>,
-    AutosortSteps: Array<crate::autosort::Step<T>>,
     AutosortTwiddles: Array<Complex<T>>,
     AutosortWork: Array<Complex<T>>,
-    crate::autosort::Step<T>: crate::autosort::StepInit,
 {
     /// Constructs an FFT over types that are `Extend`.
-    fn new_with_extend<AutosortStepParameters>(size: usize) -> Self
-    where
-        AutosortStepParameters: Default
-            + Extend<crate::autosort::StepParameters>
-            + AsRef<[crate::autosort::StepParameters]>,
-    {
+    pub fn new(size: usize) -> Self {
         let inner_fft_size = inner_fft_size(size);
-        let inner_fft = Autosort::new_with_extend::<AutosortStepParameters>(inner_fft_size);
+        let inner_fft = Autosort::new(inner_fft_size);
         Self::new_with_fft(
             size,
             inner_fft.unwrap(),
@@ -209,22 +196,11 @@ where
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub type HeapBluesteins<T> = Bluesteins<
     T,
-    Autosort<T, Box<[crate::autosort::Step<T>]>, Box<[Complex<T>]>, Box<[Complex<T>]>>,
+    Autosort<T, Box<[Complex<T>]>, Box<[Complex<T>]>>,
     Box<[Complex<T>]>,
     Box<[Complex<T>]>,
     Box<[Complex<T>]>,
 >;
-
-#[cfg(any(feature = "std", feature = "alloc"))]
-impl<T: Float> HeapBluesteins<T>
-where
-    crate::autosort::Step<T>: crate::autosort::StepInit,
-{
-    /// Constructs a Bluestein's FFT with the specified size.
-    pub fn new(size: usize) -> Self {
-        Self::new_with_extend::<Vec<_>>(size)
-    }
-}
 
 #[multiversion::multiversion]
 #[clone(target = "[x86|x86_64]+avx")]

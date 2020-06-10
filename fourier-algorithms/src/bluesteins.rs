@@ -101,9 +101,9 @@ impl<T, InnerFft, WTwiddles, XTwiddles, Work> Bluesteins<T, InnerFft, WTwiddles,
 where
     T: Float,
     InnerFft: Fft<Real = T>,
-    WTwiddles: AsMut<[Complex<T>]>,
-    XTwiddles: AsMut<[Complex<T>]>,
-    Work: AsMut<[Complex<T>]>,
+    WTwiddles: Array<Complex<T>>,
+    XTwiddles: Array<Complex<T>>,
+    Work: Array<Complex<T>>,
 {
     /// Create a new Bluestein's algorithm generator.
     pub fn new_with_fft(
@@ -173,6 +173,7 @@ where
     Work: Array<Complex<T>>,
     AutosortTwiddles: Array<Complex<T>>,
     AutosortWork: Array<Complex<T>>,
+    Autosort<T, AutosortTwiddles, AutosortWork>: Fft<Real = T>,
 {
     /// Constructs an FFT over types that are `Extend`.
     pub fn new(size: usize) -> Self {

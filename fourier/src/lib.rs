@@ -37,7 +37,7 @@ pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
         Box::new(Identity::default())
     } else if let Some(fft) = HeapSplitRadix::new(size) {
         Box::new(fft)
-    } else if let Some(fft) = HeapAutosort::new(size) {
+    } else if let Some(fft) = HeapAutosort::<f32>::new(size) {
         Box::new(fft)
     } else {
         Box::new(HeapBluesteins::new(size))
@@ -57,7 +57,7 @@ pub fn create_fft_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
         Box::new(Identity::default())
     } else if let Some(fft) = HeapSplitRadix::new(size) {
         Box::new(fft)
-    } else if let Some(fft) = HeapAutosort::new(size) {
+    } else if let Some(fft) = HeapAutosort::<f64>::new(size) {
         Box::new(fft)
     } else {
         Box::new(HeapBluesteins::new(size))

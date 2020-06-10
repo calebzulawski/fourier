@@ -25,7 +25,6 @@ use alloc::{boxed::Box, vec::Vec};
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Step {
     pub size: usize,
-    pub radix: usize,
     pub stride: usize,
     pub count: usize,
     pub twiddle_offset: usize,
@@ -34,18 +33,19 @@ pub struct Step {
 impl Step {
     fn initialize_twiddles<T: Float>(
         &self,
+        radix: usize,
         forward: &mut [nc::Complex<T>],
         inverse: &mut [nc::Complex<T>],
     ) {
         let forward = &mut forward[self.twiddle_offset..];
         let inverse = &mut inverse[self.twiddle_offset..];
-        let m = self.size / self.radix;
+        let m = self.size / radix;
         for i in 0..m {
-            forward[i * self.radix] = nc::Complex::one();
-            inverse[i * self.radix] = nc::Complex::one();
-            for j in 1..self.radix {
-                forward[i * self.radix + j] = compute_twiddle(i * j, self.size, true);
-                inverse[i * self.radix + j] = compute_twiddle(i * j, self.size, false);
+            forward[i * radix] = nc::Complex::one();
+            inverse[i * radix] = nc::Complex::one();
+            for j in 1..radix {
+                forward[i * radix + j] = compute_twiddle(i * j, self.size, true);
+                inverse[i * radix + j] = compute_twiddle(i * j, self.size, false);
             }
         }
     }
@@ -70,7 +70,6 @@ pub fn steps(size: usize) -> Option<(Steps, usize)> {
         steps[0] = Step {
             size: current_size,
             stride: current_stride,
-            radix: 4,
             count: 1,
             twiddle_offset: current_twiddle_offset,
         };
@@ -93,7 +92,6 @@ pub fn steps(size: usize) -> Option<(Steps, usize)> {
         steps[index] = Step {
             size,
             stride,
-            radix,
             count,
             twiddle_offset,
         };
@@ -137,11 +135,10 @@ where
             let work = RefCell::new(Work::new(size));
 
             // Initialize twiddles and steps
-            let mut twiddle_offset = 0;
-            let mut current_size = size;
-            for (index, step) in steps.iter().enumerate() {
+            for (radix, step) in RADICES.iter().copied().zip(steps.iter()) {
                 // initialize twiddles
                 step.initialize_twiddles(
+                    radix,
                     &mut forward_twiddles.as_mut()[step.twiddle_offset..],
                     &mut inverse_twiddles.as_mut()[step.twiddle_offset..],
                 );
@@ -156,11 +153,6 @@ where
         } else {
             None
         }
-    }
-
-    #[generic_simd::dispatch(handle)]
-    fn impl_in_place_dispatch(&self, input: &mut [nc::Complex<T>], transform: Transform) {
-        self.impl_in_place(handle, input, transform);
     }
 
     #[inline(always)]
@@ -247,7 +239,7 @@ where
                 // update state
                 current_twiddle_offset += current_size;
                 current_size /= radix;
-                current_size *= radix;
+                current_stride *= radix;
 
                 // swap buffers
                 data_in_work = !data_in_work;
@@ -279,25 +271,43 @@ where
     }
 }
 
+macro_rules! implement {
+    {
+        $handle:ident, $type:ty
+    } => {
+        impl<Twiddles, Work> Autosort<$type, Twiddles, Work>
+        where
+            Twiddles: Array<nc::Complex<$type>>,
+            Work: Array<nc::Complex<$type>>,
+        {
+            #[generic_simd::dispatch($handle)]
+            fn impl_in_place_dispatch(&self, input: &mut [nc::Complex<$type>], transform: Transform) {
+                self.impl_in_place($handle, input, transform);
+            }
+        }
+
+        impl<Twiddles, Work> Fft for Autosort<$type, Twiddles, Work>
+        where
+            Twiddles: Array<nc::Complex<$type>>,
+            Work: Array<nc::Complex<$type>>,
+        {
+            type Real = $type;
+
+            fn size(&self) -> usize {
+                self.size
+            }
+
+            fn transform_in_place(&self, input: &mut [nc::Complex<$type>], transform: Transform) {
+                self.impl_in_place_dispatch(input, transform);
+            }
+        }
+    }
+}
+implement! { handle, f32 }
+implement! { handle, f64 }
+
 /// Implementation of the Stockham autosort algorithm backed by heap allocations.
 ///
 /// Requires the `std` or `alloc` features.
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub type HeapAutosort<T> = Autosort<T, Box<[nc::Complex<T>]>, Box<[nc::Complex<T>]>>;
-
-impl<T, Twiddles, Work> Fft for Autosort<T, Twiddles, Work>
-where
-    T: Float,
-    Twiddles: AsRef<[nc::Complex<T>]>,
-    Work: AsMut<[nc::Complex<T>]>,
-{
-    type Real = T;
-
-    fn size(&self) -> usize {
-        self.size
-    }
-
-    fn transform_in_place(&self, input: &mut [nc::Complex<T>], transform: Transform) {
-        self.impl_in_place_dispatch(input, transform);
-    }
-}

@@ -37,16 +37,23 @@ impl Step {
         forward: &mut [nc::Complex<T>],
         inverse: &mut [nc::Complex<T>],
     ) {
-        let forward = &mut forward[self.twiddle_offset..];
-        let inverse = &mut inverse[self.twiddle_offset..];
-        let m = self.size / radix;
-        for i in 0..m {
-            forward[i * radix] = nc::Complex::one();
-            inverse[i * radix] = nc::Complex::one();
-            for j in 1..radix {
-                forward[i * radix + j] = compute_twiddle(i * j, self.size, true);
-                inverse[i * radix + j] = compute_twiddle(i * j, self.size, false);
+        let mut current_size = self.size;
+        let mut twiddle_offset = self.twiddle_offset;
+
+        for _ in 0..self.count {
+            let forward = &mut forward[twiddle_offset..];
+            let inverse = &mut inverse[twiddle_offset..];
+            let m = current_size / radix;
+            for i in 0..m {
+                forward[i * radix] = nc::Complex::one();
+                inverse[i * radix] = nc::Complex::one();
+                for j in 1..radix {
+                    forward[i * radix + j] = compute_twiddle(i * j, current_size, true);
+                    inverse[i * radix + j] = compute_twiddle(i * j, current_size, false);
+                }
             }
+            twiddle_offset += current_size;
+            current_size /= radix;
         }
     }
 }
@@ -73,9 +80,9 @@ pub fn steps(size: usize) -> Option<(Steps, usize)> {
             count: 1,
             twiddle_offset: current_twiddle_offset,
         };
+        current_twiddle_offset += current_size;
         current_size /= 4;
         current_stride *= 4;
-        current_twiddle_offset += current_size;
     }
 
     for (index, radix) in RADICES.iter().copied().enumerate().skip(1) {
@@ -85,16 +92,18 @@ pub fn steps(size: usize) -> Option<(Steps, usize)> {
         let mut count = 0;
         while current_size % radix == 0 {
             count += 1;
+            current_twiddle_offset += current_size;
             current_size /= radix;
             current_stride *= radix;
-            current_twiddle_offset += current_size;
         }
-        steps[index] = Step {
-            size,
-            stride,
-            count,
-            twiddle_offset,
-        };
+        if count > 0 {
+            steps[index] = Step {
+                size,
+                stride,
+                count,
+                twiddle_offset,
+            };
+        }
     }
     if current_size == 1 {
         Some((steps, current_twiddle_offset))
@@ -134,13 +143,16 @@ where
             let mut inverse_twiddles = Twiddles::new(num_twiddles);
             let work = RefCell::new(Work::new(size));
 
+            println!("steps: {:#?}", steps);
+            println!("size: {}", num_twiddles);
+
             // Initialize twiddles and steps
             for (radix, step) in RADICES.iter().copied().zip(steps.iter()) {
                 // initialize twiddles
                 step.initialize_twiddles(
                     radix,
-                    &mut forward_twiddles.as_mut()[step.twiddle_offset..],
-                    &mut inverse_twiddles.as_mut()[step.twiddle_offset..],
+                    &mut forward_twiddles.as_mut(),
+                    &mut inverse_twiddles.as_mut(),
                 );
             }
             Some(Self {

@@ -253,7 +253,7 @@ pub(crate) fn apply_butterfly_wide<T, W, H, B>(
 
     assert_eq!(input.len(), size * stride);
     assert_eq!(output.len(), input.len());
-    assert_eq!(cached_twiddles.len(), size);
+    assert!(cached_twiddles.len() >= size);
     assert!(stride >= W::VALUE);
 
     let full_count = (stride - 1) / H::Vector::width() * H::Vector::width();
@@ -316,7 +316,7 @@ pub(crate) fn apply_butterfly_narrow<T, H, B>(
 {
     assert_eq!(input.len(), size * stride);
     assert_eq!(output.len(), input.len());
-    assert_eq!(cached_twiddles.len(), size);
+    assert!(cached_twiddles.len() >= size);
 
     let m = size / B::radix();
     for i in 0..m {

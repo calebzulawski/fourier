@@ -54,7 +54,7 @@ macro_rules! create_bench {
                     } else {
                         fftw::types::Sign::Backward
                     },
-                    fftw::types::Flag::Measure,
+                    fftw::types::Flag::MEASURE,
                 )
                 .unwrap();
                 group.bench_with_input(BenchmarkId::new("FFTW", size), &input, |b, i| {

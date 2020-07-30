@@ -21,10 +21,10 @@ keywords = ["fft", "fourier", "transform"]
 
 [features]
 default = ["std"]
-std = ["multiversion/runtime_dispatch", "num-traits/std"]
+std = ["multiversion/std", "num-traits/std"]
 alloc = []
 
 [dependencies]
-multiversion = { git = "http://github.com/calebzulawski/multiversion", version = "0.3", default-features = false }
+multiversion = { version = "0.6", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 num-complex = { version = "0.2", default-features = false }

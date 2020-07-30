@@ -176,7 +176,8 @@ macro_rules! make_radix_fns {
         @impl $type:ty, $wide:literal, $radix:literal, $name:ident, $butterfly:ident
     } => {
 
-        #[multiversion::target_clones("[x86|x86_64]+avx")]
+        #[multiversion::multiversion]
+        #[clone(target = "[x86|x86_64]+avx")]
         #[inline]
         pub fn $name(
             input: &[num_complex::Complex<$type>],
@@ -311,7 +312,8 @@ make_radix_fns! {
 /// This macro creates the stage application function.
 macro_rules! make_stage_fns {
     { $type:ty, $name:ident, $radix_mod:ident } => {
-        #[multiversion::target_clones("[x86|x86_64]+avx")]
+        #[multiversion::multiversion]
+        #[clone(target = "[x86|x86_64]+avx")]
         #[inline]
         fn $name(
             input: &mut [Complex<$type>],
@@ -321,23 +323,6 @@ macro_rules! make_stage_fns {
             mut size: usize,
             transform: Transform,
         ) {
-            #[static_dispatch]
-            use $radix_mod::radix_2_narrow;
-            #[static_dispatch]
-            use $radix_mod::radix_2_wide;
-            #[static_dispatch]
-            use $radix_mod::radix_3_narrow;
-            #[static_dispatch]
-            use $radix_mod::radix_3_wide;
-            #[static_dispatch]
-            use $radix_mod::radix_4_narrow;
-            #[static_dispatch]
-            use $radix_mod::radix_4_wide;
-            #[static_dispatch]
-            use $radix_mod::radix_8_narrow;
-            #[static_dispatch]
-            use $radix_mod::radix_8_wide;
-
             #[target_cfg(target = "[x86|x86_64]+avx")]
             crate::avx_vector! { $type };
 
@@ -361,10 +346,10 @@ macro_rules! make_stage_fns {
                         (input, output)
                     };
                     match radix {
-                        8 => radix_8_narrow(from, to, transform.is_forward(), size, stride, twiddles),
-                        4 => radix_4_narrow(from, to, transform.is_forward(), size, stride, twiddles),
-                        3 => radix_3_narrow(from, to, transform.is_forward(), size, stride, twiddles),
-                        2 => radix_2_narrow(from, to, transform.is_forward(), size, stride, twiddles),
+                        8 => dispatch!($radix_mod::radix_8_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
+                        4 => dispatch!($radix_mod::radix_4_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
+                        3 => dispatch!($radix_mod::radix_3_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
+                        2 => dispatch!($radix_mod::radix_2_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
                         _ => unimplemented!("unsupported radix"),
                     }
                     size /= radix;
@@ -381,10 +366,10 @@ macro_rules! make_stage_fns {
                         (input, output)
                     };
                     match radix {
-                        8 => radix_8_wide(from, to, transform.is_forward(), size, stride, twiddles),
-                        4 => radix_4_wide(from, to, transform.is_forward(), size, stride, twiddles),
-                        3 => radix_3_wide(from, to, transform.is_forward(), size, stride, twiddles),
-                        2 => radix_2_wide(from, to, transform.is_forward(), size, stride, twiddles),
+                        8 => dispatch!($radix_mod::radix_8_wide(from, to, transform.is_forward(), size, stride, twiddles)),
+                        4 => dispatch!($radix_mod::radix_4_wide(from, to, transform.is_forward(), size, stride, twiddles)),
+                        3 => dispatch!($radix_mod::radix_3_wide(from, to, transform.is_forward(), size, stride, twiddles)),
+                        2 => dispatch!($radix_mod::radix_2_wide(from, to, transform.is_forward(), size, stride, twiddles)),
                         _ => unimplemented!("unsupported radix"),
                     }
                     size /= radix;

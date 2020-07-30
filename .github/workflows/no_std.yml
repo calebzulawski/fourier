@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         version:
-          - 1.38.0
+          - 1.41.0
           - stable
           - beta
           - nightly

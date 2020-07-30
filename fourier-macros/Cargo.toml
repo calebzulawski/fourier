@@ -30,5 +30,5 @@ std = ["fourier-algorithms/std"]
 syn = "1"
 quote = "1"
 proc-macro2 = "1"
-num-complex = { version = "0.2", default-features = false }
+num-complex = { version = "0.3", default-features = false }
 fourier-algorithms = { path = "../fourier-algorithms", version = "0.1.0", default-features = false }

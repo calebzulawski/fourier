@@ -8,10 +8,12 @@ use crate::autosort::butterfly::{apply_butterfly, Butterfly2, Butterfly3, Butter
 use crate::fft::{Fft, Transform};
 use crate::float::Float;
 use crate::twiddle::compute_twiddle;
-use arch_types::Features;
 use core::cell::RefCell;
 use core::marker::PhantomData;
-use generic_simd::vector::{width, Complex, Handle, SizedHandle, Vector};
+use generic_simd::{
+    arch,
+    vector::{scalar::Scalar, width, Complex, SizedVector},
+};
 use num_complex as nc;
 use num_traits::One as _;
 
@@ -143,9 +145,6 @@ where
             let mut inverse_twiddles = Twiddles::new(num_twiddles);
             let work = RefCell::new(Work::new(size));
 
-            println!("steps: {:#?}", steps);
-            println!("size: {}", num_twiddles);
-
             // Initialize twiddles and steps
             for (radix, step) in RADICES.iter().copied().zip(steps.iter()) {
                 // initialize twiddles
@@ -168,13 +167,27 @@ where
     }
 
     #[inline(always)]
-    fn impl_in_place<H>(&self, handle: H, input: &mut [nc::Complex<T>], transform: Transform)
-    where
-        H: Handle<nc::Complex<T>>,
-        <H as SizedHandle<nc::Complex<T>, width::W1>>::Vector: Complex,
-        <H as SizedHandle<nc::Complex<T>, width::W2>>::Vector: Complex,
-        <H as SizedHandle<nc::Complex<T>, width::W4>>::Vector: Complex,
-        <H as SizedHandle<nc::Complex<T>, width::W8>>::Vector: Complex,
+    fn impl_in_place<Token>(
+        &self,
+        token: Token,
+        input: &mut [nc::Complex<T>],
+        transform: Transform,
+        optimization: impl Fn(
+            &[nc::Complex<T>],
+            &mut [nc::Complex<T>],
+            usize,
+            usize,
+            usize,
+            &[nc::Complex<T>],
+            bool,
+        ) -> bool,
+    ) where
+        Token: arch::Token,
+        nc::Complex<T>: Scalar<Token>,
+        SizedVector<nc::Complex<T>, width::W1, Token>: Complex,
+        SizedVector<nc::Complex<T>, width::W2, Token>: Complex,
+        SizedVector<nc::Complex<T>, width::W4, Token>: Complex,
+        SizedVector<nc::Complex<T>, width::W8, Token>: Complex,
     {
         assert_eq!(input.len(), self.size);
 
@@ -194,6 +207,7 @@ where
         let mut current_size = self.size;
         let mut current_stride = 1;
         let mut current_twiddle_offset = 0;
+
         for (step, radix) in self.steps.iter().zip(&RADICES) {
             for _ in 0..step.count {
                 // determine input and output
@@ -203,49 +217,64 @@ where
                     (input, work)
                 };
 
-                // apply step
-                match radix {
-                    2 => apply_butterfly(
-                        Butterfly2,
-                        handle,
-                        from,
-                        to,
-                        current_size,
-                        current_stride,
-                        &twiddles.as_ref()[current_twiddle_offset..],
-                        transform.is_forward(),
-                    ),
-                    3 => apply_butterfly(
-                        Butterfly3,
-                        handle,
-                        from,
-                        to,
-                        current_size,
-                        current_stride,
-                        &twiddles.as_ref()[current_twiddle_offset..],
-                        transform.is_forward(),
-                    ),
-                    4 => apply_butterfly(
-                        Butterfly4,
-                        handle,
-                        from,
-                        to,
-                        current_size,
-                        current_stride,
-                        &twiddles.as_ref()[current_twiddle_offset..],
-                        transform.is_forward(),
-                    ),
-                    8 => apply_butterfly(
-                        Butterfly8,
-                        handle,
-                        from,
-                        to,
-                        current_size,
-                        current_stride,
-                        &twiddles.as_ref()[current_twiddle_offset..],
-                        transform.is_forward(),
-                    ),
-                    _ => panic!("unsupported radix"),
+                // apply optimized step, if appropriate
+                let skip = optimization(
+                    from,
+                    to,
+                    *radix,
+                    current_size,
+                    current_stride,
+                    &twiddles.as_ref()[current_twiddle_offset..],
+                    transform.is_forward(),
+                );
+
+                // apply generic step
+                if !skip {
+                    match radix {
+                        2 => apply_butterfly(
+                            Butterfly2,
+                            token,
+                            from,
+                            to,
+                            current_size,
+                            current_stride,
+                            &twiddles.as_ref()[current_twiddle_offset..],
+                            transform.is_forward(),
+                        ),
+                        3 => apply_butterfly(
+                            Butterfly3,
+                            token,
+                            from,
+                            to,
+                            current_size,
+                            current_stride,
+                            &twiddles.as_ref()[current_twiddle_offset..],
+                            transform.is_forward(),
+                        ),
+                        4 => {
+                            apply_butterfly(
+                                Butterfly4,
+                                token,
+                                from,
+                                to,
+                                current_size,
+                                current_stride,
+                                &twiddles.as_ref()[current_twiddle_offset..],
+                                transform.is_forward(),
+                            );
+                        }
+                        8 => apply_butterfly(
+                            Butterfly8,
+                            token,
+                            from,
+                            to,
+                            current_size,
+                            current_stride,
+                            &twiddles.as_ref()[current_twiddle_offset..],
+                            transform.is_forward(),
+                        ),
+                        _ => panic!("unsupported radix"),
+                    }
                 }
 
                 // update state
@@ -283,6 +312,45 @@ where
     }
 }
 
+macro_rules! avx_optimization {
+    { $optimization:ident, f32 } => {
+        let $optimization = |input: &[nc::Complex<f32>],
+                             output: &mut [nc::Complex<f32>],
+                             radix: usize,
+                             size: usize,
+                             stride: usize,
+                             twiddles: &[nc::Complex<f32>],
+                             forward: bool|
+         -> bool {
+            if radix == 4 && stride == 1 {
+                unsafe {
+                    avx_optimization::radix_4_stride_1_avx_f32(
+                        input,
+                        output,
+                        size,
+                        stride,
+                        twiddles,
+                        forward,
+                    )
+                }
+                true
+            } else {
+                false
+            }
+        };
+    };
+    { $optimization:ident, f64 } => {
+        let $optimization = |_: &[nc::Complex<f64>],
+                             _: &mut [nc::Complex<f64>],
+                             _: usize,
+                             _: usize,
+                             _: usize,
+                             _: &[nc::Complex<f64>],
+                             _: bool|
+         -> bool { false };
+    }
+}
+
 macro_rules! implement {
     {
         $handle:ident, $type:ty
@@ -294,7 +362,20 @@ macro_rules! implement {
         {
             #[generic_simd::dispatch($handle)]
             fn impl_in_place_dispatch(&self, input: &mut [nc::Complex<$type>], transform: Transform) {
-                self.impl_in_place($handle, input, transform);
+                #[target_cfg(not(target = "[x86|x86_64]+avx"))]
+                let optimization = |_: &[nc::Complex<$type>],
+                                    _: &mut [nc::Complex<$type>],
+                                    _: usize,
+                                    _: usize,
+                                    _: usize,
+                                    _: &[nc::Complex<$type>],
+                                    _: bool|
+                 -> bool { false };
+
+                #[target_cfg(target = "[x86|x86_64]+avx")]
+                avx_optimization! { optimization, $type }
+
+                self.impl_in_place($handle, input, transform, optimization);
             }
         }
 

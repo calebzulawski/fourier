@@ -33,15 +33,17 @@ macro_rules! create_bench {
                     } else {
                         fourier::Transform::Ifft
                     };
-                    b.iter(|| fourier.transform(&input, &mut output, transform))
+                    b.iter(|| fourier.transform(&input, &mut output, transform));
                 });
 
                 // RustFFT
                 let rustfft = rustfft::FFTplanner::<$type>::new(!forward).plan_fft(size);
                 group.bench_with_input(BenchmarkId::new("RustFFT", size), &input, |b, i| {
-                    let mut input = Vec::new();
-                    input.extend_from_slice(i);
-                    let mut output = vec![Complex::default(); input.len()];
+                    let mut input = vec![Default::default(); i.len()];
+                    for (i, o) in i.iter().zip(input.iter_mut()) {
+                        *o = num_02::Complex::new(i.re, i.im);
+                    }
+                    let mut output = vec![num_02::Complex::default(); input.len()];
                     b.iter(|| rustfft.process(input.as_mut(), output.as_mut()))
                 });
 
@@ -54,7 +56,7 @@ macro_rules! create_bench {
                     } else {
                         fftw::types::Sign::Backward
                     },
-                    fftw::types::Flag::Measure,
+                    fftw::types::Flag::MEASURE,
                 )
                 .unwrap();
                 group.bench_with_input(BenchmarkId::new("FFTW", size), &input, |b, i| {

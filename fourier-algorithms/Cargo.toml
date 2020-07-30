@@ -21,13 +21,12 @@ keywords = ["fft", "fourier", "transform"]
 
 [features]
 default = ["std"]
-std = ["multiversion/runtime_dispatch", "num-traits/std", "generic-simd/std", "arch-types/std"]
+std = ["multiversion/runtime_dispatch", "num-traits/std", "generic-simd/std"]
 alloc = []
 
 [dependencies]
-arch-types = { version = "0.1", default-features = false, git = "https://github.com/calebzulawski/arch-types.git" }
 multiversion = { version = "0.5.1", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
-num-complex = { version = "0.2", default-features = false }
+num-complex = { version = "0.3", default-features = false }
 generic-simd = { version = "0.1", default-features = false, features = ["complex"], git = "https://github.com/calebzulawski/safe_simd.git" }
 paste = "0.1"

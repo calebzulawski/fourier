@@ -254,7 +254,7 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
     output: &mut [nc::Complex<T>],
     size: usize,
     stride: usize,
-    cached_twiddles: &[nc::Complex<T>],
+    mut cached_twiddles: &[nc::Complex<T>],
     forward: bool,
 ) where
     T: Float,
@@ -277,9 +277,8 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
     for i in 0..m {
         let twiddles = {
             let mut twiddles = B::make_buffer(token);
-            for k in 1..B::radix() {
-                twiddles.as_mut()[k] =
-                    unsafe { cached_twiddles.get_unchecked(i * B::radix() + k) }.splat(token);
+            for (v, t) in twiddles.as_mut().iter_mut().zip(cached_twiddles.iter()) {
+                *v = t.splat(token);
             }
             twiddles
         };
@@ -310,6 +309,8 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
                 unsafe { scratch.as_ref()[k].write_ptr(store.add(stride * k)) };
             }
         }
+
+        cached_twiddles = &cached_twiddles[B::radix()..];
     }
 }
 
@@ -321,7 +322,7 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
     output: &mut [nc::Complex<T>],
     size: usize,
     stride: usize,
-    cached_twiddles: &[nc::Complex<T>],
+    mut cached_twiddles: &[nc::Complex<T>],
     forward: bool,
 ) where
     T: Float,
@@ -338,9 +339,8 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
     for i in 0..m {
         let twiddles = {
             let mut twiddles = B::make_buffer(token);
-            for k in 1..B::radix() {
-                twiddles.as_mut()[k] =
-                    unsafe { cached_twiddles.get_unchecked(i * B::radix() + k) }.splat(token);
+            for (v, t) in twiddles.as_mut().iter_mut().zip(cached_twiddles.iter()) {
+                *v = t.splat(token);
             }
             twiddles
         };
@@ -367,6 +367,8 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
                 unsafe { store.add(stride * k + j).write(scratch.as_ref()[k][0]) };
             }
         }
+
+        cached_twiddles = &cached_twiddles[B::radix()..];
     }
 }
 

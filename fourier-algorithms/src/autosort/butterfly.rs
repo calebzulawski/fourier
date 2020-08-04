@@ -279,7 +279,7 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
             let mut twiddles = B::make_buffer(token);
             for k in 1..B::radix() {
                 twiddles.as_mut()[k] =
-                    unsafe { cached_twiddles.as_ptr().add(i * B::radix() + k).read() }.splat(token);
+                    unsafe { cached_twiddles.get_unchecked(i * B::radix() + k) }.splat(token);
             }
             twiddles
         };
@@ -340,7 +340,7 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
             let mut twiddles = B::make_buffer(token);
             for k in 1..B::radix() {
                 twiddles.as_mut()[k] =
-                    unsafe { cached_twiddles.as_ptr().add(i * B::radix() + k).read() }.splat(token);
+                    unsafe { cached_twiddles.get_unchecked(i * B::radix() + k) }.splat(token);
             }
             twiddles
         };

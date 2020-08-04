@@ -273,7 +273,7 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
 
     let full_count = (stride - 1) / W::VALUE * W::VALUE;
     let final_offset = stride - W::VALUE;
-    let input_vectors = input.overlapping(From::from(token));
+    let input_vectors = input.overlapping(token);
     for i in 0..m {
         let twiddles = {
             let mut twiddles = B::make_buffer(token);
@@ -364,11 +364,7 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
 
             // Store a single value
             for k in 0..B::radix() {
-                unsafe {
-                    store
-                        .add(stride * k + j)
-                        .write(scratch.as_ref()[k].as_slice()[0])
-                };
+                unsafe { store.add(stride * k + j).write(scratch.as_ref()[k][0]) };
             }
         }
     }

@@ -184,7 +184,7 @@ pub(crate) fn apply_butterfly<T, Token, B>(
     output: &mut [nc::Complex<T>],
     size: usize,
     stride: usize,
-    cached_twiddles: &[nc::Complex<T>],
+    twiddles: &[nc::Complex<T>],
     forward: bool,
 ) where
     T: Float,
@@ -201,47 +201,19 @@ pub(crate) fn apply_butterfly<T, Token, B>(
 {
     if stride >= 8 {
         apply_butterfly_wide::<T, width::W8, Token, B>(
-            butterfly,
-            token,
-            input,
-            output,
-            size,
-            stride,
-            cached_twiddles,
-            forward,
+            butterfly, token, input, output, size, stride, twiddles, forward,
         );
     } else if stride >= 4 {
         apply_butterfly_wide::<T, width::W4, Token, B>(
-            butterfly,
-            token,
-            input,
-            output,
-            size,
-            stride,
-            cached_twiddles,
-            forward,
+            butterfly, token, input, output, size, stride, twiddles, forward,
         );
     } else if stride >= 2 {
         apply_butterfly_wide::<T, width::W2, Token, B>(
-            butterfly,
-            token,
-            input,
-            output,
-            size,
-            stride,
-            cached_twiddles,
-            forward,
+            butterfly, token, input, output, size, stride, twiddles, forward,
         );
     } else {
         apply_butterfly_narrow::<T, Token, B>(
-            butterfly,
-            token,
-            input,
-            output,
-            size,
-            stride,
-            cached_twiddles,
-            forward,
+            butterfly, token, input, output, size, stride, twiddles, forward,
         );
     }
 }
@@ -254,7 +226,7 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
     output: &mut [nc::Complex<T>],
     size: usize,
     stride: usize,
-    mut cached_twiddles: &[nc::Complex<T>],
+    twiddles: &[nc::Complex<T>],
     forward: bool,
 ) where
     T: Float,
@@ -268,49 +240,71 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
 
     assert_eq!(input.len(), size * stride);
     assert_eq!(output.len(), input.len());
-    assert!(cached_twiddles.len() >= size);
     assert!(stride >= W::VALUE);
 
-    let full_count = (stride - 1) / W::VALUE * W::VALUE;
-    let final_offset = stride - W::VALUE;
-    let input_vectors = input.overlapping(token);
-    for i in 0..m {
-        let twiddles = {
-            let mut twiddles = B::make_buffer(token);
-            for (v, t) in twiddles.as_mut().iter_mut().zip(cached_twiddles.iter()) {
-                *v = t.splat(token);
-            }
-            twiddles
-        };
+    let steps = twiddles[..size]
+        .chunks(B::radix())
+        .zip(
+            input
+                .windows(stride * (B::radix() - 1) * m + stride)
+                .step_by(stride),
+        )
+        .enumerate();
+    debug_assert!(steps.len() == m);
 
-        // Loop over full vectors, with a final overlapping vector
-        for j in (0..full_count)
-            .step_by(W::VALUE)
-            .chain(core::iter::once(final_offset))
-        {
+    if stride == W::VALUE {
+        for (i, (twiddles, input)) in steps {
             // Load full vectors
             let mut scratch = B::make_buffer(token);
             for k in 0..B::radix() {
-                scratch.as_mut()[k] =
-                    unsafe { input_vectors.get_unchecked(j + stride * (i + k * m)) };
+                scratch.as_mut()[k] = input.overlapping(token).get(stride * k * m).unwrap();
             }
 
             // Butterfly with optional twiddles
             scratch = B::apply(token, scratch, forward);
             if size != B::radix() {
                 for k in 1..B::radix() {
-                    scratch.as_mut()[k] *= twiddles.as_ref()[k];
+                    scratch.as_mut()[k] *= twiddles[k].splat(token);
                 }
             }
 
             // Store full vectors
-            let store = unsafe { output.as_mut_ptr().add(j + B::radix() * stride * i) };
+            let store = unsafe { output.as_mut_ptr().add(B::radix() * stride * i) };
             for k in 0..B::radix() {
                 unsafe { scratch.as_ref()[k].write_ptr(store.add(stride * k)) };
             }
         }
+    } else {
+        let full_count = (stride - 1) / W::VALUE * W::VALUE;
+        let final_offset = stride - W::VALUE;
 
-        cached_twiddles = &cached_twiddles[B::radix()..];
+        for (i, (twiddles, input)) in steps {
+            // Loop over full vectors, with a final overlapping vector
+            for j in (0..full_count)
+                .step_by(W::VALUE)
+                .chain(core::iter::once(final_offset))
+            {
+                // Load full vectors
+                let mut scratch = B::make_buffer(token);
+                for k in 0..B::radix() {
+                    scratch.as_mut()[k] = input.overlapping(token).get(j + stride * k * m).unwrap();
+                }
+
+                // Butterfly with optional twiddles
+                scratch = B::apply(token, scratch, forward);
+                if size != B::radix() {
+                    for k in 1..B::radix() {
+                        scratch.as_mut()[k] *= twiddles[k].splat(token);
+                    }
+                }
+
+                // Store full vectors
+                let store = unsafe { output.as_mut_ptr().add(j + B::radix() * stride * i) };
+                for k in 0..B::radix() {
+                    unsafe { scratch.as_ref()[k].write_ptr(store.add(stride * k)) };
+                }
+            }
+        }
     }
 }
 
@@ -322,7 +316,7 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
     output: &mut [nc::Complex<T>],
     size: usize,
     stride: usize,
-    mut cached_twiddles: &[nc::Complex<T>],
+    twiddles: &[nc::Complex<T>],
     forward: bool,
 ) where
     T: Float,
@@ -333,32 +327,31 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
 {
     assert_eq!(input.len(), size * stride);
     assert_eq!(output.len(), input.len());
-    assert!(cached_twiddles.len() >= size);
 
     let m = size / B::radix();
-    for i in 0..m {
-        let twiddles = {
-            let mut twiddles = B::make_buffer(token);
-            for (v, t) in twiddles.as_mut().iter_mut().zip(cached_twiddles.iter()) {
-                *v = t.splat(token);
-            }
-            twiddles
-        };
-
-        let load = unsafe { input.as_ptr().add(stride * i) };
+    let steps = twiddles[..size]
+        .chunks(B::radix())
+        .zip(
+            input
+                .windows(stride * (B::radix() - 1) * m + stride)
+                .step_by(stride),
+        )
+        .enumerate();
+    debug_assert!(steps.len() == m);
+    for (i, (twiddles, input)) in steps {
         let store = unsafe { output.as_mut_ptr().add(B::radix() * stride * i) };
         for j in 0..stride {
             // Load a single value
             let mut scratch = B::make_buffer(token);
             for k in 0..B::radix() {
-                scratch.as_mut()[k] = unsafe { load.add(stride * k * m + j).read() }.splat(token);
+                scratch.as_mut()[k] = input[stride * k * m].splat(token);
             }
 
             // Butterfly with optional twiddles
             scratch = B::apply(token, scratch, forward);
             if size != B::radix() {
                 for k in 1..B::radix() {
-                    scratch.as_mut()[k] *= twiddles.as_ref()[k];
+                    scratch.as_mut()[k] *= twiddles[k].splat(token);
                 }
             }
 
@@ -367,8 +360,6 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
                 unsafe { store.add(stride * k + j).write(scratch.as_ref()[k][0]) };
             }
         }
-
-        cached_twiddles = &cached_twiddles[B::radix()..];
     }
 }
 
@@ -391,7 +382,7 @@ macro_rules! implement {
             output: &mut [nc::Complex<$type>],
             size: usize,
             stride: usize,
-            cached_twiddles: &[nc::Complex<$type>],
+            twiddles: &[nc::Complex<$type>],
             forward: bool,
         ) {
             apply_butterfly(
@@ -401,7 +392,7 @@ macro_rules! implement {
                 output,
                 size,
                 stride,
-                cached_twiddles,
+                twiddles,
                 forward,
             );
         }

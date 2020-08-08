@@ -313,7 +313,7 @@ where
 }
 
 macro_rules! avx_optimization {
-    { $optimization:ident, f32 } => {
+    { $optimization:ident, $token:ident, f32 } => {
         let $optimization = |input: &[nc::Complex<f32>],
                              output: &mut [nc::Complex<f32>],
                              radix: usize,
@@ -325,10 +325,10 @@ macro_rules! avx_optimization {
             if radix == 4 && stride == 1 {
                 unsafe {
                     avx_optimization::radix_4_stride_1_avx_f32(
+                        $token,
                         input,
                         output,
                         size,
-                        stride,
                         twiddles,
                         forward,
                     )
@@ -339,7 +339,7 @@ macro_rules! avx_optimization {
             }
         };
     };
-    { $optimization:ident, f64 } => {
+    { $optimization:ident, $token:ident, f64 } => {
         let $optimization = |_: &[nc::Complex<f64>],
                              _: &mut [nc::Complex<f64>],
                              _: usize,
@@ -373,7 +373,7 @@ macro_rules! implement {
                  -> bool { false };
 
                 #[target_cfg(target = "[x86|x86_64]+avx")]
-                avx_optimization! { optimization, $type }
+                avx_optimization! { optimization, $handle, $type }
 
                 self.impl_in_place($handle, input, transform, optimization);
             }

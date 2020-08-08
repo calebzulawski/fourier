@@ -4,50 +4,32 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
-#[multiversion::target("[x86|x86_64]+avx")]
-#[inline]
-unsafe fn cmul_f32(a: __m256, b: __m256) -> __m256 {
-    let re = _mm256_moveldup_ps(a);
-    let im = _mm256_movehdup_ps(a);
-    let sh = _mm256_shuffle_ps(b, b, 0xb1);
-    _mm256_addsub_ps(_mm256_mul_ps(re, b), _mm256_mul_ps(im, sh))
-}
+use generic_simd::{
+    arch::x86::{cf32x4, Avx},
+    vector::Vector,
+};
+use num_complex as nc;
 
-#[multiversion::target("[x86|x86_64]+avx")]
-#[inline]
-unsafe fn cmul_f64(a: __m256d, b: __m256d) -> __m256d {
-    let re = _mm256_shuffle_pd(a, a, 0x00);
-    let im = _mm256_shuffle_pd(a, a, 0x03);
-    let sh = _mm256_shuffle_pd(b, b, 0x01);
-    _mm256_addsub_pd(_mm256_mul_pd(re, b), _mm256_mul_pd(im, sh))
-}
-
-#[multiversion::target("[x86|x86_64]+avx")]
 #[inline]
 pub(crate) unsafe fn radix_4_stride_1_avx_f32(
-    input: &[num_complex::Complex<f32>],
-    output: &mut [num_complex::Complex<f32>],
+    token: Avx,
+    input: &[nc::Complex<f32>],
+    output: &mut [nc::Complex<f32>],
     size: usize,
-    stride: usize,
-    twiddles: &[num_complex::Complex<f32>],
+    twiddles: &[nc::Complex<f32>],
     forward: bool,
 ) {
-    assert_eq!(stride, 1);
     const RADIX: usize = 4;
     let m = size / RADIX;
 
     for i in 0..m {
         // Load
-        let gathered = _mm256_set_ps(
-            input.as_ptr().add(3 * m + i).read().im,
-            input.as_ptr().add(3 * m + i).read().re,
-            input.as_ptr().add(2 * m + i).read().im,
-            input.as_ptr().add(2 * m + i).read().re,
-            input.as_ptr().add(m + i).read().im,
-            input.as_ptr().add(m + i).read().re,
-            input.as_ptr().add(i).read().im,
-            input.as_ptr().add(i).read().re,
-        );
+        let mut gathered = cf32x4::zeroed(token);
+        gathered[0] = input.as_ptr().add(i).read();
+        gathered[1] = input.as_ptr().add(m + i).read();
+        gathered[2] = input.as_ptr().add(2 * m + i).read();
+        gathered[3] = input.as_ptr().add(3 * m + i).read();
+        let gathered = gathered.to_underlying();
 
         // first radix 2
         // in vector      |  sorted
@@ -73,13 +55,19 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
             _mm256_permute_ps(a_jumbled, 0b01_00_11_10),
             0b0101_0000,
         );
-
-        let a_negated = _mm256_sub_ps(_mm256_setzero_ps(), a_swapped);
-        let a_rotated = if forward {
-            _mm256_blend_ps(a_swapped, a_negated, 0b0001_0000) // negate new ar3
-        } else {
-            _mm256_blend_ps(a_swapped, a_negated, 0b0100_0000) // negate new ai3
-        };
+        let a_rotated = _mm256_xor_ps(
+            _mm256_set_ps(
+                0.,
+                f32::from_bits((!forward as u32) << 31),
+                0.,
+                f32::from_bits((forward as u32) << 31),
+                0.,
+                0.,
+                0.,
+                0.,
+            ),
+            a_swapped,
+        );
 
         // second radix 2
         // in vector      |  sorted
@@ -104,15 +92,15 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
             let temp = _mm256_permute_ps(b_jumbled, 0b10_00_10_00);
             _mm256_permute2f128_ps(temp, temp, 0x01)
         }; // br3 bi3 br3 bi3 br1 bi1 br1 bi1
-        let mut out = _mm256_blend_ps(out_lo, out_hi, 0b0011_1100); // br0 bi0 br3 bi3 br1 bi1 br2 bi2
-        if size != RADIX {
-            let twiddles = _mm256_loadu_ps(twiddles.as_ptr().add(RADIX * i) as *const _);
-            out = cmul_f32(out, twiddles);
-        }
-        _mm256_storeu_ps(output.as_mut_ptr().add(RADIX * i) as *mut _, out);
+        let out = _mm256_blend_ps(out_lo, out_hi, 0b0011_1100); // br0 bi0 br3 bi3 br1 bi1 br2 bi2
+        let mut out = cf32x4::from_underlying(token, out);
+
+        out *= cf32x4::read_ptr(token, twiddles.as_ptr().add(RADIX * i));
+        out.write_ptr(output.as_mut_ptr().add(RADIX * i));
     }
 }
 
+/// This function works, but is slow and currently unused.
 #[multiversion::target("[x86|x86_64]+avx")]
 #[inline]
 #[allow(dead_code)]
@@ -123,6 +111,14 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f64(
     size: usize,
     twiddles: &[num_complex::Complex<f64>],
 ) {
+    #[inline]
+    unsafe fn cmul_f64(a: __m256d, b: __m256d) -> __m256d {
+        let re = _mm256_shuffle_pd(a, a, 0x00);
+        let im = _mm256_shuffle_pd(a, a, 0x03);
+        let sh = _mm256_shuffle_pd(b, b, 0x01);
+        _mm256_addsub_pd(_mm256_mul_pd(re, b), _mm256_mul_pd(im, sh))
+    }
+
     const RADIX: usize = 4;
     let m = size / RADIX;
 

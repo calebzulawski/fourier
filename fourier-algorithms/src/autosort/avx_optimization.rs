@@ -19,6 +19,10 @@ pub(crate) unsafe fn radix_4_stride_1_avx_f32(
     twiddles: &[nc::Complex<f32>],
     forward: bool,
 ) {
+    assert_eq!(input.len(), size);
+    assert_eq!(output.len(), size);
+    assert!(twiddles.len() >= size);
+
     const RADIX: usize = 4;
     let m = size / RADIX;
 

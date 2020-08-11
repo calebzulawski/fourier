@@ -25,16 +25,21 @@ pub use fourier_algorithms::{Fft, Transform};
 //pub use fourier_macros::static_fft;
 
 /// A real scalar type that supports FFTs.
+///
+/// Requires the `std` or `alloc` feature.
+#[cfg(any(feature = "std", feature = "alloc"))]
 pub trait Float: Copy {
     fn create_fft(size: usize) -> Box<dyn Fft<Real = Self> + Send>;
 }
 
+#[cfg(any(feature = "std", feature = "alloc"))]
 impl Float for f32 {
     fn create_fft(size: usize) -> Box<dyn Fft<Real = Self> + Send> {
         Box::new(fourier_algorithms::HeapAlgorithm::new(size))
     }
 }
 
+#[cfg(any(feature = "std", feature = "alloc"))]
 impl Float for f64 {
     fn create_fft(size: usize) -> Box<dyn Fft<Real = Self> + Send> {
         Box::new(fourier_algorithms::HeapAlgorithm::new(size))

@@ -99,23 +99,67 @@ macro_rules! implement {
             if !item.generics.params.is_empty() {
                 return Err(Error::new(item.ident.span(), "structs tagged with #[static_fft] must have no generic parameters"))
             }
-            type CplxVec = Vec<Complex<$type>>;
-            type Autosort = fourier_algorithms::Autosort<$type, CplxVec, CplxVec>;
-            type Bluesteins = fourier_algorithms::Bluesteins<$type, Autosort, CplxVec, CplxVec, CplxVec>;
             let ty: Ident = parse_quote! { $type };
             let size = config.len.base10_parse::<usize>()?;
             let name = item.ident.clone();
             let usize_ty: Ident = parse_quote!{ usize };
-            if let Some(autosort) = Autosort::new(size) {
+            if let Some(autosort) = fourier_algorithms::autosort::HeapAutosort::<$type>::new(size) {
                 let (forward_twiddles, twiddles_type) = to_array_complex(&ty, autosort.twiddles().0);
                 let (inverse_twiddles, _) = to_array_complex(&ty, autosort.twiddles().1);
                 let (counts, counts_type) = to_array(&usize_ty, &autosort.counts());
                 let work_size = autosort.work_size();
                 let work_type = quote!{ [Complex<$type>; #work_size] };
-                let autosort_type = quote!{ fourier_algorithms::Autosort::<$type, &'static Twiddles, Work> };
+                let autosort_type = quote!{ fourier_algorithms::autosort::Autosort::<$type, &'static Twiddles, Work> };
                 Ok(quote! {
                     #[derive(Default)]
                     #item
+
+                    #[doc(hidden)]
+                    #vis struct #work_type([num_complex::Complex<#type>; #work_size]);
+
+                    #[doc(hidden)]
+                    #vis struct #twiddles_type([num_complex::Complex<#type>; #twiddles_size]);
+
+                    impl AsRef<[num_complex::Complex<#type>]> for #work_type {
+                        fn as_ref(&self) -> &[num_complex::Complex<#type>] {
+                            &self.0
+                        }
+                    }
+
+                    impl AsMut<[num_complex::Complex<#type>]> for #work_type {
+                        fn as_ref(&mut self) -> &mut [num_complex::Complex<#type>] {
+                            &mut self.0
+                        }
+                    }
+
+                    impl AsRef<[num_complex::Complex<#type>]> for #twiddles_type {
+                        fn as_ref(&self) -> &[num_complex::Complex<#type>] {
+                            &self.0
+                        }
+                    }
+
+                    impl AsMut<[num_complex::Complex<#type>]> for #twiddles_type {
+                        fn as_ref(&mut self) -> &mut [num_complex::Complex<#type>] {
+                            &mut self.0
+                        }
+                    }
+
+                    impl fourier_algorithms::Array for #work_type {
+                        fn new(size: usize) -> Self {
+                            assert_eq!(size, #size);
+                            Self([Default::default(); #size])
+                        }
+                    }
+
+                    impl fourier_algorithms::Array for #twiddles_type {
+                        fn new(size: usize) -> Self {
+                            assert_eq!(size, #twiddles_size);
+                            Self([Default::default(); #twiddles_size])
+                        }
+                    }
+
+                    #[derive(Clone, Default, Debug)]
+                    #vis struct #name(fourier_algorithms::autosort::Autosort<#type, #work_type, #twiddles_type>);
 
                     impl fourier_algorithms::Fft for #name {
                         type Real = #ty;
@@ -129,46 +173,12 @@ macro_rules! implement {
                             input: &mut [num_complex::Complex<Self::Real>],
                             transform: fourier_algorithms::Transform,
                         ) {
-                            use fourier_algorithms::Fft;
-                            use num_complex::Complex;
-
-                            // Work around 32 element trait limit
-                            struct Twiddles(#twiddles_type);
-                            impl AsRef<[Complex<$type>]> for Twiddles {
-                                fn as_ref(&self) -> &[Complex<$type>] {
-                                    &self.0
-                                }
-                            }
-
-                            struct Work(#work_type);
-                            impl AsMut<[Complex<$type>]> for Work {
-                                fn as_mut(&mut self) -> &mut [Complex<$type>] {
-                                    &mut self.0
-                                }
-                            }
-
-                            const COUNTS: #counts_type = #counts;
-                            const WORK: Work = Work([Complex::<#ty>::new(0., 0.); #work_size]);
-
-                            // Twiddles are shared between all instances
-                            static FORWARD_TWIDDLES: Twiddles = Twiddles(#forward_twiddles);
-                            static INVERSE_TWIDDLES: Twiddles = Twiddles(#inverse_twiddles);
-
-                            let autosort = unsafe {
-                                #autosort_type::new_from_parts(
-                                    #size,
-                                    COUNTS,
-                                    &FORWARD_TWIDDLES,
-                                    &INVERSE_TWIDDLES,
-                                    WORK,
-                                )
-                            };
-                            autosort.transform_in_place(input, transform);
+                            self.0.transform_in_place(input, transform);
                         }
                     }
                 })
             } else {
-                let bluesteins = Bluesteins::new(size);
+                let bluesteins = fourier_algorithms::bluesteins::HeapBluesteins::<$type>::new(size);
                 let (forward_w_twiddles, w_twiddles_type) = to_array_complex(&ty, bluesteins.w_twiddles().0);
                 let (inverse_w_twiddles, _) = to_array_complex(&ty, bluesteins.w_twiddles().1);
                 let (forward_x_twiddles, x_twiddles_type) = to_array_complex(&ty, bluesteins.x_twiddles().0);
@@ -176,7 +186,12 @@ macro_rules! implement {
                 let work_size = bluesteins.work_size();
                 let inner_fft_size = bluesteins.inner_fft_size();
                 Ok(quote! {
-                    #item
+                    #[fourier::static_fft($type, #inner_fft_size)]
+                    #[doc(hidden)]
+                    #vis struct 
+
+
+                    #vis 
 
                     impl fourier_algorithms::Fft for #name {
                         type Real = #ty;

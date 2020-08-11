@@ -23,7 +23,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Rust Toolchain
-      run: rustup install --profile minimal stable-${{ matrix.target }} && rustup default stable-${{ matrix.target }}
+# TODO switch to stable when 1.46 released
+#      run: rustup install --profile minimal stable-${{ matrix.target }} && rustup default stable-${{ matrix.target }}
+      run: rustup install --profile minimal beta-${{ matrix.target }} && rustup default beta-${{ matrix.target }}
       shell: bash
     - name: Configure
       run: cmake -S fourier-ffi -B build ${{ matrix.generator }}

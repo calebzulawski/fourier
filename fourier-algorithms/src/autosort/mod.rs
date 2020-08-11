@@ -25,11 +25,11 @@ use alloc::{boxed::Box, vec::Vec};
 
 /// Represents the parameters of a single FFT step
 #[derive(Copy, Clone, Default, Debug)]
-pub struct Step {
-    pub size: usize,
-    pub stride: usize,
-    pub count: usize,
-    pub twiddle_offset: usize,
+struct Step {
+    size: usize,
+    stride: usize,
+    count: usize,
+    twiddle_offset: usize,
 }
 
 impl Step {
@@ -64,53 +64,83 @@ const NUM_STEPS: usize = 5;
 const RADICES: [usize; NUM_STEPS] = [4, 8, 4, 3, 2];
 type Steps = [Step; NUM_STEPS];
 
-/// Determines the steps for a particular FFT size.
-///
-/// Returns the steps and the total number of twiddles.
-pub fn steps(size: usize) -> Option<(Steps, usize)> {
-    let mut current_size = size;
-    let mut current_stride = 1;
-    let mut current_twiddle_offset = 0;
+/// A configuration for constructing an Autosort FFT.
+#[derive(Debug, Clone)]
+pub struct Configuration {
+    size: usize,
+    steps: Steps,
+    twiddles: usize,
+}
 
-    let mut steps = Steps::default();
+impl Configuration {
+    /// Create a new configuration.
+    pub const fn new(size: usize) -> Option<Configuration> {
+        let mut current_size = size;
+        let mut current_stride = 1;
+        let mut current_twiddle_offset = 0;
 
-    // First step is radix 4 (helps performance)
-    if current_size % 4 == 0 {
-        steps[0] = Step {
-            size: current_size,
-            stride: current_stride,
-            count: 1,
-            twiddle_offset: current_twiddle_offset,
-        };
-        current_twiddle_offset += current_size;
-        current_size /= 4;
-        current_stride *= 4;
-    }
+        let mut steps = [Step {
+            size: 0,
+            stride: 0,
+            count: 0,
+            twiddle_offset: 0,
+        }; NUM_STEPS];
 
-    for (index, radix) in RADICES.iter().copied().enumerate().skip(1) {
-        let size = current_size;
-        let stride = current_stride;
-        let twiddle_offset = current_twiddle_offset;
-        let mut count = 0;
-        while current_size % radix == 0 {
-            count += 1;
-            current_twiddle_offset += current_size;
-            current_size /= radix;
-            current_stride *= radix;
-        }
-        if count > 0 {
-            steps[index] = Step {
-                size,
-                stride,
-                count,
-                twiddle_offset,
+        // First step is radix 4 (helps performance)
+        if current_size % 4 == 0 {
+            steps[0] = Step {
+                size: current_size,
+                stride: current_stride,
+                count: 1,
+                twiddle_offset: current_twiddle_offset,
             };
+            current_twiddle_offset += current_size;
+            current_size /= 4;
+            current_stride *= 4;
+        }
+
+        let mut index = 1;
+        while index < NUM_STEPS {
+            let radix = RADICES[index];
+            let size = current_size;
+            let stride = current_stride;
+            let twiddle_offset = current_twiddle_offset;
+            let mut count = 0;
+            while current_size % radix == 0 {
+                count += 1;
+                current_twiddle_offset += current_size;
+                current_size /= radix;
+                current_stride *= radix;
+            }
+            if count > 0 {
+                steps[index] = Step {
+                    size,
+                    stride,
+                    count,
+                    twiddle_offset,
+                };
+            }
+            index += 1;
+        }
+        if current_size == 1 {
+            Some(Configuration {
+                size,
+                steps,
+                twiddles: current_twiddle_offset,
+            })
+        } else {
+            None
         }
     }
-    if current_size == 1 {
-        Some((steps, current_twiddle_offset))
-    } else {
-        None
+
+    /// Return the FFT size.
+    pub const fn size(&self) -> usize {
+        self.size
+    }
+
+    /// Return the number of twiddles.
+    pub const fn twiddles(&self) -> usize {
+        self.twiddles
     }
 }
 
@@ -138,32 +168,33 @@ where
     Twiddles: Array<nc::Complex<T>>,
     Work: Array<nc::Complex<T>>,
 {
+    /// Constructs an FFT from a configuration.
+    pub fn from_configuration(configuration: Configuration) -> Self {
+        let mut forward_twiddles = Twiddles::new(configuration.twiddles);
+        let mut inverse_twiddles = Twiddles::new(configuration.twiddles);
+        let work = RefCell::new(Work::new(configuration.size));
+
+        // Initialize twiddles and steps
+        for (radix, step) in RADICES.iter().copied().zip(configuration.steps.iter()) {
+            // initialize twiddles
+            step.initialize_twiddles(
+                radix,
+                &mut forward_twiddles.as_mut(),
+                &mut inverse_twiddles.as_mut(),
+            );
+        }
+        Self {
+            size: configuration.size,
+            steps: configuration.steps,
+            twiddles: (forward_twiddles, inverse_twiddles),
+            work,
+            real_type: PhantomData,
+        }
+    }
+
     /// Constructs an FFT.
     pub fn new(size: usize) -> Option<Self> {
-        if let Some((steps, num_twiddles)) = steps(size) {
-            let mut forward_twiddles = Twiddles::new(num_twiddles);
-            let mut inverse_twiddles = Twiddles::new(num_twiddles);
-            let work = RefCell::new(Work::new(size));
-
-            // Initialize twiddles and steps
-            for (radix, step) in RADICES.iter().copied().zip(steps.iter()) {
-                // initialize twiddles
-                step.initialize_twiddles(
-                    radix,
-                    &mut forward_twiddles.as_mut(),
-                    &mut inverse_twiddles.as_mut(),
-                );
-            }
-            Some(Self {
-                size,
-                steps,
-                twiddles: (forward_twiddles, inverse_twiddles),
-                work,
-                real_type: PhantomData,
-            })
-        } else {
-            None
-        }
+        Configuration::new(size).map(Self::from_configuration)
     }
 
     #[inline(always)]
@@ -398,9 +429,3 @@ macro_rules! implement {
 }
 implement! { handle, f32 }
 implement! { handle, f64 }
-
-/// Implementation of the Stockham autosort algorithm backed by heap allocations.
-///
-/// Requires the `std` or `alloc` features.
-#[cfg(any(feature = "std", feature = "alloc"))]
-pub type HeapAutosort<T> = Autosort<T, Box<[nc::Complex<T>]>, Box<[nc::Complex<T>]>>;

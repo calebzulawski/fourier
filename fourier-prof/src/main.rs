@@ -8,7 +8,7 @@ fn main() {
         .get_matches();
 
     let size = usize::from_str_radix(matches.value_of("size").unwrap(), 10).unwrap();
-    let fft = fourier::create_fft_f32(size);
+    let fft = fourier::create_fft::<f32>(size);
 
     let mut input = rand::thread_rng()
         .sample_iter(&Standard)

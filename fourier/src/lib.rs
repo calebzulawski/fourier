@@ -24,36 +24,30 @@ use alloc::boxed::Box;
 pub use fourier_algorithms::{Fft, Transform};
 //pub use fourier_macros::static_fft;
 
-/// Create a complex-valued FFT over `f32` with the specified size.
-///
-/// Requires the `std` or `alloc` feature.
-#[cfg(any(feature = "std", feature = "alloc"))]
-pub fn create_fft_f32(size: usize) -> Box<dyn Fft<Real = f32> + Send> {
-    use fourier_algorithms::{
-        autosort::HeapAutosort, bluesteins::HeapBluesteins, identity::Identity,
-    };
-    if size == 1 {
-        Box::new(Identity::default())
-    } else if let Some(fft) = HeapAutosort::<f32>::new(size) {
-        Box::new(fft)
-    } else {
-        Box::new(HeapBluesteins::new(size))
+/// A real scalar type that supports FFTs.
+pub trait Float: Copy {
+    fn create_fft(size: usize) -> Box<dyn Fft<Real = Self> + Send>;
+}
+
+impl Float for f32 {
+    fn create_fft(size: usize) -> Box<dyn Fft<Real = Self> + Send> {
+        Box::new(fourier_algorithms::HeapAlgorithm::new(size))
     }
 }
 
-/// Create a complex-valued FFT over `f64` with the specified size.
+impl Float for f64 {
+    fn create_fft(size: usize) -> Box<dyn Fft<Real = Self> + Send> {
+        Box::new(fourier_algorithms::HeapAlgorithm::new(size))
+    }
+}
+
+/// Create a complex-valued FFT over `T` with the specified size.
 ///
 /// Requires the `std` or `alloc` feature.
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub fn create_fft_f64(size: usize) -> Box<dyn Fft<Real = f64> + Send> {
-    use fourier_algorithms::{
-        autosort::HeapAutosort, bluesteins::HeapBluesteins, identity::Identity,
-    };
-    if size == 1 {
-        Box::new(Identity::default())
-    } else if let Some(fft) = HeapAutosort::<f64>::new(size) {
-        Box::new(fft)
-    } else {
-        Box::new(HeapBluesteins::new(size))
-    }
+pub fn create_fft<T>(size: usize) -> Box<dyn Fft<Real = T> + Send>
+where
+    T: Float,
+{
+    T::create_fft(size)
 }

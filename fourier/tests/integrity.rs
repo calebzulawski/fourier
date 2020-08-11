@@ -144,7 +144,7 @@ fn near_f64(actual: &[Complex<f64>], expected: &[Complex<f64>]) {
 
 macro_rules! generate_test {
     {
-        $type:ty, $name:ident, $fft_gen:ident, $comparison:ident, $forward:expr
+        $type:ty, $name:ident, $comparison:ident, $forward:expr
     } => {
         #[cfg(any(feature = "std", feature = "alloc"))]
         #[test]
@@ -177,7 +177,7 @@ macro_rules! generate_test {
             };
             for size in 1..MAX_SIZE {
                 println!("SIZE: {}", size);
-                let fft = fourier::$fft_gen(size);
+                let fft = fourier::create_fft::<$type>(size);
                 println!("{:#?}", fft);
                 fft.transform(&input[0..size], &mut fft_output[0..size], transform);
                 reference(&input[0..size], &mut dft_output[0..size]);
@@ -187,10 +187,10 @@ macro_rules! generate_test {
     }
 }
 
-generate_test! { f32, integrity_forward_f32, create_fft_f32, near_f32, true }
-generate_test! { f32, integrity_inverse_f32, create_fft_f32, near_f32, false }
-generate_test! { f64, integrity_forward_f64, create_fft_f64, near_f64, true }
-generate_test! { f64, integrity_inverse_f64, create_fft_f64, near_f64, false }
+generate_test! { f32, integrity_forward_f32, near_f32, true }
+generate_test! { f32, integrity_inverse_f32, near_f32, false }
+generate_test! { f64, integrity_forward_f64, near_f64, true }
+generate_test! { f64, integrity_inverse_f64, near_f64, false }
 
 macro_rules! generate_static_test {
     {

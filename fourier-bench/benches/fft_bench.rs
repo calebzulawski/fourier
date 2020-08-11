@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use fourier::Fft as _;
 use num::Complex;
 use rand::distributions::Standard;
 use rand::Rng;

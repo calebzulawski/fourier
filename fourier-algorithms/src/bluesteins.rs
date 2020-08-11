@@ -92,42 +92,54 @@ where
     }
 }
 
-/// Returns the size of the inner FFT required for Bluestein's FFT.
-pub fn inner_fft_size(size: usize) -> usize {
-    (2 * size - 1).checked_next_power_of_two().unwrap()
+const fn const_checked_next_power_of_two(value: usize) -> Option<usize> {
+    if value == core::usize::MAX {
+        None
+    } else {
+        let mut power = 1;
+        while power < value {
+            power <<= 1;
+        }
+        Some(power)
+    }
 }
 
-impl<T, InnerFft, WTwiddles, XTwiddles, Work> Bluesteins<T, InnerFft, WTwiddles, XTwiddles, Work>
-where
-    T: Float,
-    InnerFft: Fft<Real = T>,
-    WTwiddles: Array<Complex<T>>,
-    XTwiddles: Array<Complex<T>>,
-    Work: Array<Complex<T>>,
-{
-    /// Create a new Bluestein's algorithm generator.
-    pub fn new_with_fft(
-        size: usize,
-        inner_fft: InnerFft,
-        mut w_forward: WTwiddles,
-        mut w_inverse: WTwiddles,
-        mut x_forward: XTwiddles,
-        mut x_inverse: XTwiddles,
-        work: Work,
-    ) -> Self {
-        assert_eq!(inner_fft.size(), inner_fft_size(size));
-        initialize_w_twiddles(size, &inner_fft, w_forward.as_mut(), w_inverse.as_mut());
-        initialize_x_twiddles(size, x_forward.as_mut(), x_inverse.as_mut());
-        Self {
-            size,
-            inner_fft,
-            w_forward,
-            w_inverse,
-            x_forward,
-            x_inverse,
-            work: RefCell::new(work),
-            real_type: PhantomData,
+/// A configuration for constructing Bluestein's Algorithm FFTs.
+#[derive(Debug, Clone)]
+pub struct Configuration {
+    size: usize,
+    inner_configuration: crate::autosort::Configuration,
+}
+
+impl Configuration {
+    /// Create a new configuration.
+    pub const fn new(size: usize) -> Option<Configuration> {
+        if size > core::usize::MAX / 2 {
+            None
+        } else {
+            if let Some(inner_size) = const_checked_next_power_of_two(2 * size - 1) {
+                if let Some(inner_configuration) = crate::autosort::Configuration::new(inner_size) {
+                    Some(Configuration {
+                        size,
+                        inner_configuration,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         }
+    }
+
+    /// Return the FFT size.
+    pub const fn size(&self) -> usize {
+        self.size
+    }
+
+    /// Return the underlying Autosort configuration.
+    pub const fn inner_configuration(&self) -> &crate::autosort::Configuration {
+        &self.inner_configuration
     }
 }
 
@@ -175,33 +187,41 @@ where
     AutosortWork: Array<Complex<T>>,
     Autosort<T, AutosortTwiddles, AutosortWork>: Fft<Real = T>,
 {
-    /// Constructs an FFT over types that are `Extend`.
+    /// Constructs an FFT from a configuration.
+    pub fn from_configuration(configuration: Configuration) -> Self {
+        let mut w_forward = WTwiddles::new(configuration.inner_configuration.size());
+        let mut w_inverse = WTwiddles::new(configuration.inner_configuration.size());
+        let mut x_forward = XTwiddles::new(configuration.size);
+        let mut x_inverse = XTwiddles::new(configuration.size);
+        let work = Work::new(configuration.inner_configuration.size());
+        let inner_fft =
+            crate::autosort::Autosort::from_configuration(configuration.inner_configuration);
+        initialize_w_twiddles(
+            configuration.size,
+            &inner_fft,
+            w_forward.as_mut(),
+            w_inverse.as_mut(),
+        );
+        initialize_x_twiddles(configuration.size, x_forward.as_mut(), x_inverse.as_mut());
+        Self {
+            size: configuration.size,
+            inner_fft,
+            w_forward,
+            w_inverse,
+            x_forward,
+            x_inverse,
+            work: RefCell::new(work),
+            real_type: PhantomData,
+        }
+    }
+
+    /// Constructs an FFT.
     pub fn new(size: usize) -> Self {
-        let inner_fft_size = inner_fft_size(size);
-        let inner_fft = Autosort::new(inner_fft_size);
-        Self::new_with_fft(
-            size,
-            inner_fft.unwrap(),
-            Array::new(inner_fft_size),
-            Array::new(inner_fft_size),
-            Array::new(size),
-            Array::new(size),
-            Array::new(inner_fft_size),
-        )
+        Configuration::new(size)
+            .map(Self::from_configuration)
+            .unwrap()
     }
 }
-
-/// Implementation of Bluestein's algorithm backed by heap allocations.
-///
-/// Requires the `std` or `alloc` features.
-#[cfg(any(feature = "std", feature = "alloc"))]
-pub type HeapBluesteins<T> = Bluesteins<
-    T,
-    Autosort<T, Box<[Complex<T>]>, Box<[Complex<T>]>>,
-    Box<[Complex<T>]>,
-    Box<[Complex<T>]>,
-    Box<[Complex<T>]>,
->;
 
 #[multiversion::multiversion]
 #[clone(target = "[x86|x86_64]+avx")]

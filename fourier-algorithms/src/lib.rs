@@ -18,6 +18,12 @@ pub use float::*;
 
 use num_complex as nc;
 
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+extern crate alloc;
+
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::boxed::Box;
+
 /// Configuration for constructing FFTs.
 #[derive(Debug, Clone)]
 pub enum Configuration {

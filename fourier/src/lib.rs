@@ -21,8 +21,7 @@ extern crate alloc;
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 use alloc::boxed::Box;
 
-pub use fourier_algorithms::{Fft, Transform};
-//pub use fourier_macros::static_fft;
+pub use fourier_algorithms::{stack_fft, Fft, Transform};
 
 /// A real scalar type that supports FFTs.
 ///

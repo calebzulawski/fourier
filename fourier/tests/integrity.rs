@@ -232,26 +232,26 @@ macro_rules! generate_static_test {
     }
 }
 
-/*
-#[fourier::static_fft(f32, 64)]
-struct StaticFft64f32;
-generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_forward, near_f32, true }
-generate_static_test! { f32, StaticFft64f32, integrity_static_f32_64_inverse, near_f32, false }
+fourier::stack_fft! {
+    struct StackFft64f32 => f32, 64
+}
+generate_static_test! { f32, StackFft64f32, integrity_static_f32_64_forward, near_f32, true }
+generate_static_test! { f32, StackFft64f32, integrity_static_f32_64_inverse, near_f32, false }
 
-#[fourier::static_fft(f64, 64)]
-struct StaticFft64f64;
-generate_static_test! { f64, StaticFft64f64, integrity_static_f64_64_forward, near_f64, true }
-generate_static_test! { f64, StaticFft64f64, integrity_static_f64_64_inverse, near_f64, false }
+fourier::stack_fft! {
+    struct StackFft64f64 => f64, 64
+}
+generate_static_test! { f64, StackFft64f64, integrity_static_f64_64_forward, near_f64, true }
+generate_static_test! { f64, StackFft64f64, integrity_static_f64_64_inverse, near_f64, false }
 
-#[fourier::static_fft(f32, 73)]
-#[derive(Default)]
-struct StaticFft73f32;
-generate_static_test! { f32, StaticFft73f32, integrity_static_f32_73_forward, near_f32, true }
-generate_static_test! { f32, StaticFft73f32, integrity_static_f32_73_inverse, near_f32, false }
+fourier::stack_fft! {
+    struct StackFft73f32 => f32, 73
+}
+generate_static_test! { f32, StackFft73f32, integrity_static_f32_73_forward, near_f32, true }
+generate_static_test! { f32, StackFft73f32, integrity_static_f32_73_inverse, near_f32, false }
 
-#[fourier::static_fft(f64, 73)]
-#[derive(Default)]
-struct StaticFft73f64;
-generate_static_test! { f64, StaticFft73f64, integrity_static_f64_73_forward, near_f64, true }
-generate_static_test! { f64, StaticFft73f64, integrity_static_f64_73_inverse, near_f64, false }
-*/
+fourier::stack_fft! {
+    struct StackFft73f64 => f64, 73
+}
+generate_static_test! { f64, StackFft73f64, integrity_static_f64_73_forward, near_f64, true }
+generate_static_test! { f64, StackFft73f64, integrity_static_f64_73_inverse, near_f64, false }

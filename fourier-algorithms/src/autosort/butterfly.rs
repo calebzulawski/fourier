@@ -366,10 +366,8 @@ macro_rules! implement {
     {
         $token:ident, $name32:ident, $name64:ident,$butterfly:ident
     } => {
-        paste::item_with_macros! {
-            implement! { @impl $token, $name32, $butterfly, f32 }
-            implement! { @impl $token, $name64, $butterfly, f64 }
-        }
+        implement! { @impl $token, $name32, $butterfly, f32 }
+        implement! { @impl $token, $name64, $butterfly, f64 }
     };
     {
         @impl $token:ident, $name:ident, $butterfly:ident, $type:ty

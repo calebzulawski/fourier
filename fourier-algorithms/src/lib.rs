@@ -33,6 +33,7 @@ pub enum Configuration {
 }
 
 impl Configuration {
+    /// Construct a new configuration with the FFT size.
     pub const fn new(size: usize) -> Option<Self> {
         if size == 1 {
             Some(Self::Identity)
@@ -51,8 +52,8 @@ pub enum Algorithm<
     T,
     AutosortTwiddles,
     AutosortWork,
-    BluesteinsXTwiddles,
     BluesteinsWTwiddles,
+    BluesteinsXTwiddles,
     BluesteinsWork,
 > {
     Identity(identity::Identity<T>),
@@ -61,8 +62,8 @@ pub enum Algorithm<
         bluesteins::Bluesteins<
             T,
             autosort::Autosort<T, AutosortTwiddles, AutosortWork>,
-            BluesteinsXTwiddles,
             BluesteinsWTwiddles,
+            BluesteinsXTwiddles,
             BluesteinsWork,
         >,
     ),
@@ -72,16 +73,16 @@ impl<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     > core::fmt::Debug
     for Algorithm<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     >
 {
@@ -98,24 +99,24 @@ impl<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     >
     Algorithm<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     >
 where
     T: Float,
     AutosortTwiddles: Array<nc::Complex<T>>,
     AutosortWork: Array<nc::Complex<T>>,
-    BluesteinsXTwiddles: Array<nc::Complex<T>>,
     BluesteinsWTwiddles: Array<nc::Complex<T>>,
+    BluesteinsXTwiddles: Array<nc::Complex<T>>,
     BluesteinsWork: Array<nc::Complex<T>>,
     autosort::Autosort<T, AutosortTwiddles, AutosortWork>: Fft<Real = T>,
 {
@@ -152,24 +153,24 @@ impl<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     > Fft
     for Algorithm<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     >
 where
     T: Float,
     AutosortTwiddles: Array<nc::Complex<T>>,
     AutosortWork: Array<nc::Complex<T>>,
-    BluesteinsXTwiddles: Array<nc::Complex<T>>,
     BluesteinsWTwiddles: Array<nc::Complex<T>>,
+    BluesteinsXTwiddles: Array<nc::Complex<T>>,
     BluesteinsWork: Array<nc::Complex<T>>,
     autosort::Autosort<T, AutosortTwiddles, AutosortWork>: Fft<Real = T>,
 {
@@ -224,28 +225,132 @@ impl<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     > Into<Box<dyn Fft<Real = T> + Send>>
     for Algorithm<
         T,
         AutosortTwiddles,
         AutosortWork,
-        BluesteinsXTwiddles,
         BluesteinsWTwiddles,
+        BluesteinsXTwiddles,
         BluesteinsWork,
     >
 where
     T: Float,
     AutosortTwiddles: Array<nc::Complex<T>>,
     AutosortWork: Array<nc::Complex<T>>,
-    BluesteinsXTwiddles: Array<nc::Complex<T>>,
     BluesteinsWTwiddles: Array<nc::Complex<T>>,
+    BluesteinsXTwiddles: Array<nc::Complex<T>>,
     BluesteinsWork: Array<nc::Complex<T>>,
     autosort::Autosort<T, AutosortTwiddles, AutosortWork>: Fft<Real = T>,
 {
     fn into(self) -> Box<dyn Fft<Real = T> + Send> {
         self.to_boxed_fft()
+    }
+}
+
+#[doc(hidden)]
+pub use num_complex;
+
+#[doc(hidden)]
+pub use paste;
+
+/// Create a stack-allocated FFT type.
+///
+/// The FFT type implements [`Fft`] and [`Default`].
+/// The type does not use the heap and is suitable for `no_std` without allocation.
+///
+/// ```
+/// # use fourier_algorithms::stack_fft;
+/// stack_fft! {
+///     pub struct Fft128 => f32, 128
+/// }
+/// ```
+///
+/// [`Fft`]: trait.Fft.html
+/// [`Default`]: https://doc.rust-lang.org/std/default/trait.Default.html
+#[macro_export]
+macro_rules! stack_fft {
+    { $vis:vis struct $name:ident => $real:ty, $size:literal } => {
+        $crate::paste::paste! {
+            // Array types
+            $crate::make_array! {
+                struct [<__AutosortTwiddles_ $name>]([$crate::num_complex::Complex<$real>; $name::AUTOSORT_TWIDDLES]);
+            }
+            $crate::make_array! {
+                struct [<__AutosortSize_ $name>]([$crate::num_complex::Complex<$real>; $name::AUTOSORT_SIZE]);
+            }
+            $crate::make_array! {
+                struct [<__FftSize_ $name>]([$crate::num_complex::Complex<$real>; $name::SIZE]);
+            }
+
+            // FFT
+            $vis struct $name($crate::Algorithm<
+                $real,
+                [<__AutosortTwiddles_ $name>], // twiddles
+                [<__AutosortSize_ $name>],     // work
+                [<__AutosortSize_ $name>],     // Bluestein's w twiddles
+                [<__FftSize_ $name>],          // Bluestein's x twiddles
+                [<__AutosortSize_ $name>],     // Bluestein's inner FFT work
+            >);
+
+            impl core::default::Default for $name {
+                fn default() -> Self {
+                    Self($crate::Algorithm::from_configuration(Self::CONFIGURATION.unwrap()))
+                }
+            }
+
+            impl core::fmt::Debug for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    self.0.fmt(f)
+                }
+            }
+
+            impl $crate::Fft for $name {
+                type Real = $real;
+
+                #[inline]
+                fn size(&self) -> usize {
+                    use $crate::Fft as _;
+                    self.0.size()
+                }
+
+                fn transform_in_place(
+                    &self,
+                    input: &mut [$crate::num_complex::Complex<Self::Real>],
+                    transform: $crate::Transform
+                ) {
+                    use $crate::Fft as _;
+                    self.0.transform_in_place(input, transform);
+                }
+
+                fn transform(
+                    &self,
+                    input: &[$crate::num_complex::Complex<Self::Real>],
+                    output: &mut [$crate::num_complex::Complex<Self::Real>],
+                    transform: $crate::Transform,
+                ) {
+                    use $crate::Fft as _;
+                    self.0.transform(input, output, transform);
+                }
+
+            }
+
+            impl $name {
+                const SIZE: usize = $size;
+                const CONFIGURATION: Option<$crate::Configuration> = $crate::Configuration::new(Self::SIZE);
+                const AUTOSORT_TWIDDLES: usize = match Self::CONFIGURATION {
+                    Some($crate::Configuration::Autosort(autosort)) => autosort.twiddles(),
+                    Some($crate::Configuration::Bluesteins(bluesteins)) => bluesteins.inner_configuration().twiddles(),
+                    _ => 0,
+                };
+                const AUTOSORT_SIZE: usize = match Self::CONFIGURATION {
+                    Some($crate::Configuration::Bluesteins(bluesteins)) => bluesteins.inner_configuration().size(),
+                    _ => Self::SIZE,
+                };
+            }
+        }
     }
 }

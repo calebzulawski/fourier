@@ -10,15 +10,21 @@ pub trait Array<T>: AsRef<[T]> + AsMut<[T]> + Send + 'static {
     fn new(size: usize) -> Self;
 }
 
-#[cfg(any(feature = "std", feature = "alloc"))]
-impl<T> Array<T> for Box<[T]>
-where
-    T: Default + Clone + Send + 'static,
-{
-    fn new(size: usize) -> Self {
-        vec![T::default(); size].into_boxed_slice()
+macro_rules! box_impl {
+    { $type:ty } => {
+        #[cfg(any(feature = "std", feature = "alloc"))]
+        impl Array<$type> for Box<[$type]> {
+            fn new(size: usize) -> Self {
+                generic_simd::alignment::allocate_max_aligned_slice(size)
+            }
+        }
     }
 }
+
+box_impl! { f32 }
+box_impl! { f64 }
+box_impl! { num_complex::Complex<f32> }
+box_impl! { num_complex::Complex<f64> }
 
 /// Creates a static array that implements [`Array`].
 ///
@@ -37,7 +43,7 @@ where
 #[macro_export]
 macro_rules! make_array {
     { $vis:vis struct $name:ident([$type:ty; $size:expr]); } => {
-        $vis struct $name([$type; Self::SIZE]);
+        $vis struct $name($crate::generic_simd::alignment::Aligned<$type, [$type; Self::SIZE]>);
 
         impl $name {
             const SIZE: usize = $size;
@@ -45,20 +51,20 @@ macro_rules! make_array {
 
         impl AsRef<[$type]> for $name {
             fn as_ref(&self) -> &[$type] {
-                &self.0
+                self.0.as_ref()
             }
         }
 
         impl AsMut<[$type]> for $name {
             fn as_mut(&mut self) -> &mut [$type] {
-                &mut self.0
+                self.0.as_mut()
             }
         }
 
         impl $crate::Array<$type> for $name {
             fn new(size: usize) -> Self {
                 assert_eq!(size, Self::SIZE);
-                Self([<$type>::default(); Self::SIZE])
+                Self($crate::generic_simd::alignment::Aligned::new([<$type>::default(); Self::SIZE]))
             }
         }
     }

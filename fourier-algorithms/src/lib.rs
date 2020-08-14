@@ -16,6 +16,9 @@ pub use array::*;
 pub use fft::*;
 pub use float::*;
 
+#[doc(hidden)]
+pub use generic_simd;
+
 use num_complex as nc;
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]

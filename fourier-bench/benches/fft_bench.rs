@@ -1,5 +1,4 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use fourier::Fft as _;
 use num::Complex;
 use rand::distributions::Standard;
 use rand::Rng;
@@ -83,7 +82,7 @@ macro_rules! create_scenarios {
     } => {
         mod bench_f32 {
             use super::*;
-            create_bench! { bench, f32, fourier::create_fft_f32, fftw::plan::C2CPlan32::aligned, fftw::types::c32::new }
+            create_bench! { bench, f32, fourier::create_fft::<f32>, fftw::plan::C2CPlan32::aligned, fftw::types::c32::new }
             pub mod fft {
                 use super::*;
                 $(
@@ -113,7 +112,7 @@ macro_rules! create_scenarios {
         }
         mod bench_f64 {
             use super::*;
-            create_bench! { bench, f64, fourier::create_fft_f64, fftw::plan::C2CPlan64::aligned, fftw::types::c64::new }
+            create_bench! { bench, f64, fourier::create_fft::<f64>, fftw::plan::C2CPlan64::aligned, fftw::types::c64::new }
             pub mod fft {
                 use super::*;
                 $(

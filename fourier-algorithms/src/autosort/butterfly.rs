@@ -161,13 +161,13 @@ where
         let twiddle_neg = nc::Complex::new(-t.re, t.im).splat(token);
         let a1 = Butterfly4::apply(token, [input[0], input[2], input[4], input[6]], forward);
         let mut b1 = Butterfly4::apply(token, [input[1], input[3], input[5], input[7]], forward);
-        b1[1] = b1[1] * twiddle;
+        b1[1] *= twiddle;
         b1[2] = if forward {
             b1[2].mul_neg_i()
         } else {
             b1[2].mul_i()
         };
-        b1[3] = b1[3] * twiddle_neg;
+        b1[3] *= twiddle_neg;
         let a2 = Butterfly2::apply(token, [a1[0], b1[0]], forward);
         let b2 = Butterfly2::apply(token, [a1[1], b1[1]], forward);
         let c2 = Butterfly2::apply(token, [a1[2], b1[2]], forward);
@@ -332,8 +332,8 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
         // Butterfly with optional twiddles
         scratch = B::apply(token, scratch, forward);
         if size != B::radix() {
-            for k in 1..B::radix() {
-                scratch.as_mut()[k] *= twiddles[k].splat(token);
+            for (s, t) in scratch.as_mut().iter_mut().zip(twiddles) {
+                *s *= t.splat(token);
             }
         }
 
@@ -434,8 +434,8 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
         // Butterfly with optional twiddles
         scratch = B::apply(token, scratch, forward);
         if size != B::radix() {
-            for k in 1..B::radix() {
-                scratch.as_mut()[k] *= twiddles[k].splat(token);
+            for (s, t) in scratch.as_mut().iter_mut().zip(twiddles) {
+                *s *= t.splat(token);
             }
         }
 

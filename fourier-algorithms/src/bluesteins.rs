@@ -116,19 +116,17 @@ impl Configuration {
     pub const fn new(size: usize) -> Option<Configuration> {
         if size > core::usize::MAX / 2 {
             None
-        } else {
-            if let Some(inner_size) = const_checked_next_power_of_two(2 * size - 1) {
-                if let Some(inner_configuration) = crate::autosort::Configuration::new(inner_size) {
-                    Some(Configuration {
-                        size,
-                        inner_configuration,
-                    })
-                } else {
-                    None
-                }
+        } else if let Some(inner_size) = const_checked_next_power_of_two(2 * size - 1) {
+            if let Some(inner_configuration) = crate::autosort::Configuration::new(inner_size) {
+                Some(Configuration {
+                    size,
+                    inner_configuration,
+                })
             } else {
                 None
             }
+        } else {
+            None
         }
     }
 

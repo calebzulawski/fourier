@@ -50,6 +50,7 @@ unsafe fn transform<T: fourier::Float>(
     }));
 }
 
+/// Create an FFT over f32.
 #[no_mangle]
 pub extern "C" fn fourier_create_float(
     size: usize,
@@ -57,6 +58,10 @@ pub extern "C" fn fourier_create_float(
     create(size)
 }
 
+/// Destroy an FFT over f32.
+///
+/// # Safety
+/// `state` must have been created by `fourier_create_float`.
 #[no_mangle]
 pub unsafe extern "C" fn fourier_destroy_float(
     state: *mut Box<dyn fourier::Fft<Real = f32> + Send>,
@@ -64,6 +69,11 @@ pub unsafe extern "C" fn fourier_destroy_float(
     destroy(state)
 }
 
+/// Perform an in-place FFT over f32.
+///
+/// # Safety
+/// `state` must have been created by `fourier_create_float`.
+/// `input` must point to an array with length equal to the FFT length.
 #[no_mangle]
 pub unsafe extern "C" fn fourier_transform_in_place_float(
     state: *const Box<dyn fourier::Fft<Real = f32> + Send>,
@@ -73,6 +83,11 @@ pub unsafe extern "C" fn fourier_transform_in_place_float(
     transform_in_place(state, input, transform)
 }
 
+/// Perform an in-place FFT over f32.
+///
+/// # Safety
+/// `state` must have been created by `fourier_create_float`.
+/// `input` must point to an array with length equal to the FFT length.
 #[no_mangle]
 pub unsafe extern "C" fn fourier_transform_float(
     state: *const Box<dyn fourier::Fft<Real = f32> + Send>,
@@ -83,6 +98,7 @@ pub unsafe extern "C" fn fourier_transform_float(
     self::transform(state, input, output, transform)
 }
 
+/// Create an FFT over f64.
 #[no_mangle]
 pub extern "C" fn fourier_create_double(
     size: size_t,
@@ -90,6 +106,10 @@ pub extern "C" fn fourier_create_double(
     create(size)
 }
 
+/// Destroy an FFT over f64.
+///
+/// # Safety
+/// `state` must have been created by `fourier_create_double`.
 #[no_mangle]
 pub unsafe extern "C" fn fourier_destroy_double(
     state: *mut Box<dyn fourier::Fft<Real = f64> + Send>,
@@ -97,6 +117,11 @@ pub unsafe extern "C" fn fourier_destroy_double(
     destroy(state)
 }
 
+/// Perform an in-place FFT over f64.
+///
+/// # Safety
+/// `state` must have been created by `fourier_create_double`.
+/// `input` must point to an array with length equal to the FFT length.
 #[no_mangle]
 pub unsafe extern "C" fn fourier_transform_in_place_double(
     state: *const Box<dyn fourier::Fft<Real = f64> + Send>,
@@ -106,6 +131,11 @@ pub unsafe extern "C" fn fourier_transform_in_place_double(
     transform_in_place(state, input, transform)
 }
 
+/// Perform an out-of-place FFT over f64.
+///
+/// # Safety
+/// `state` must have been created by `fourier_create_double`.
+/// `input` and `output` must point to arrays with length equal to the FFT length.
 #[no_mangle]
 pub unsafe extern "C" fn fourier_transform_double(
     state: *const Box<dyn fourier::Fft<Real = f64> + Send>,

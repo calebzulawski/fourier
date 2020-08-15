@@ -335,10 +335,8 @@ where
                     *x *= scale;
                 }
             }
-        } else {
-            if data_in_work {
-                input.copy_from_slice(work);
-            }
+        } else if data_in_work {
+            input.copy_from_slice(work);
         }
     }
 }

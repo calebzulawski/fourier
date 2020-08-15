@@ -143,7 +143,7 @@ where
 
     /// Creates a boxed FFT, skipping enum dispatch.
     #[cfg(any(feature = "std", feature = "alloc"))]
-    pub fn to_boxed_fft(self) -> Box<dyn Fft<Real = T> + Send> {
+    pub fn into_boxed_fft(self) -> Box<dyn Fft<Real = T> + Send> {
         match self {
             Self::Identity(identity) => Box::new(identity),
             Self::Autosort(autosort) => Box::new(autosort),
@@ -250,7 +250,7 @@ where
     autosort::Autosort<T, AutosortTwiddles, AutosortWork>: Fft<Real = T>,
 {
     fn into(self) -> Box<dyn Fft<Real = T> + Send> {
-        self.to_boxed_fft()
+        self.into_boxed_fft()
     }
 }
 

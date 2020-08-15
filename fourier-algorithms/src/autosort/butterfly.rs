@@ -2,8 +2,8 @@ use crate::float::Float;
 use generic_simd::{
     arch,
     vector::{
+        pointer::PointerWidth as _,
         scalar::{Scalar, ScalarWidth},
-        slice::SliceWidth as _,
         width, Complex, SizedVector, Vector,
     },
 };
@@ -218,6 +218,66 @@ pub(crate) fn apply_butterfly<T, Token, B>(
     }
 }
 
+struct ButterflyIter<'a, T> {
+    twiddles: *const nc::Complex<T>,
+    input: *const nc::Complex<T>,
+    output: *mut nc::Complex<T>,
+    twiddles_end: *const nc::Complex<T>,
+    twiddles_step: usize,
+    input_step: usize,
+    output_step: usize,
+    phantom_data: core::marker::PhantomData<&'a T>,
+}
+
+impl<'a, T> ButterflyIter<'a, T> {
+    fn new(
+        size: usize,
+        stride: usize,
+        radix: usize,
+        twiddles: &'a [nc::Complex<T>],
+        input: &'a [nc::Complex<T>],
+        output: &'a mut [nc::Complex<T>],
+    ) -> Self {
+        assert!(twiddles.len() >= size);
+        assert_eq!(input.len(), size * stride);
+        assert_eq!(output.len(), size * stride);
+        Self {
+            twiddles: twiddles.as_ptr(),
+            input: input.as_ptr(),
+            output: output.as_mut_ptr(),
+            twiddles_end: unsafe { twiddles.as_ptr().add(size) },
+            twiddles_step: radix,
+            input_step: stride,
+            output_step: stride * radix,
+            phantom_data: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, T> core::iter::Iterator for ButterflyIter<'a, T> {
+    type Item = (
+        &'a [nc::Complex<T>],
+        *const nc::Complex<T>,
+        *mut nc::Complex<T>,
+    );
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.twiddles == self.twiddles_end {
+            None
+        } else {
+            let item = (
+                unsafe { core::slice::from_raw_parts(self.twiddles, self.twiddles_step) },
+                self.input,
+                self.output,
+            );
+            self.twiddles = unsafe { self.twiddles.add(self.twiddles_step) };
+            self.input = unsafe { self.input.add(self.input_step) };
+            self.output = unsafe { self.output.add(self.output_step) };
+            Some(item)
+        }
+    }
+}
+
 #[inline(always)]
 pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
     _butterfly: B,
@@ -236,76 +296,107 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
     B: Butterfly<T, W, Token>,
     SizedVector<nc::Complex<T>, W, Token>: Complex,
 {
+    assert!(stride >= W::VALUE);
     let m = size / B::radix();
 
-    assert_eq!(input.len(), size * stride);
-    assert_eq!(output.len(), input.len());
-    assert!(stride >= W::VALUE);
+    let steps = ButterflyIter::new(size, stride, B::radix(), twiddles, input, output);
 
-    let steps = twiddles[..size].chunks_exact(B::radix()).zip(
-        input
-            .windows(stride * (B::radix() - 1) * m + stride)
-            .step_by(stride)
-            .zip(output.chunks_exact_mut(stride * B::radix())),
-    );
-    assert!(steps.len() == m);
+    #[inline(always)]
+    fn apply<T, W, Token, B>(
+        _butterfly: &B,
+        token: Token,
+        twiddles: &[nc::Complex<T>],
+        mut input: *const nc::Complex<T>,
+        mut output: *mut nc::Complex<T>,
+        size: usize,
+        stride: usize,
+        m: usize,
+        forward: bool,
+    ) where
+        T: Float,
+        W: width::Width,
+        Token: arch::Token,
+        nc::Complex<T>: ScalarWidth<Token, W>,
+        B: Butterfly<T, W, Token>,
+        SizedVector<nc::Complex<T>, W, Token>: Complex,
+    {
+        // Load vectors
+        let mut scratch = B::make_buffer(token);
+        for k in 0..B::radix() {
+            unsafe {
+                scratch.as_mut()[k] = input.vector_read(token);
+                input = input.add(stride * m);
+            }
+        }
+
+        // Butterfly with optional twiddles
+        scratch = B::apply(token, scratch, forward);
+        if size != B::radix() {
+            for k in 1..B::radix() {
+                scratch.as_mut()[k] *= twiddles[k].splat(token);
+            }
+        }
+
+        // Store vectors
+        for k in 0..B::radix() {
+            unsafe {
+                scratch.as_ref()[k].write_ptr(output);
+                output = output.add(stride);
+            }
+        }
+    };
 
     if stride == W::VALUE {
-        for (twiddles, (input, output)) in steps {
-            // Load full vectors
-            let mut scratch = B::make_buffer(token);
-            for k in 0..B::radix() {
-                scratch.as_mut()[k] = input.overlapping(token).get(stride * k * m).unwrap();
-            }
-
-            // Butterfly with optional twiddles
-            scratch = B::apply(token, scratch, forward);
-            if size != B::radix() {
-                for k in 1..B::radix() {
-                    scratch.as_mut()[k] *= twiddles[k].splat(token);
-                }
-            }
-
-            // Store full vectors
-            let outputs = scratch
-                .as_ref()
-                .iter()
-                .zip(output.chunks_exact_mut(W::VALUE));
-            assert!(outputs.len() == B::radix());
-            for (s, o) in outputs {
-                s.write(o);
+        for (twiddles, input, output) in steps {
+            apply(
+                &_butterfly,
+                token,
+                twiddles,
+                input,
+                output,
+                size,
+                stride,
+                m,
+                forward,
+            );
+        }
+    } else if stride % W::VALUE == 0 {
+        for (twiddles, input, output) in steps {
+            for j in (0..stride / W::VALUE * W::VALUE).step_by(W::VALUE) {
+                apply(
+                    &_butterfly,
+                    token,
+                    twiddles,
+                    unsafe { input.add(j) },
+                    unsafe { output.add(j) },
+                    size,
+                    stride,
+                    m,
+                    forward,
+                )
             }
         }
     } else {
         let full_count = (stride - 1) / W::VALUE * W::VALUE;
         let final_offset = stride - W::VALUE;
 
-        for (twiddles, (input, output)) in steps {
+        for (twiddles, input, output) in steps {
             // Loop over full vectors, with a final overlapping vector
             for j in (0..full_count)
                 .step_by(W::VALUE)
                 .chain(core::iter::once(final_offset))
             {
-                // Load full vectors
-                let mut scratch = B::make_buffer(token);
-                for k in 0..B::radix() {
-                    scratch.as_mut()[k] = input.overlapping(token).get(j + stride * k * m).unwrap();
-                }
-
-                // Butterfly with optional twiddles
-                scratch = B::apply(token, scratch, forward);
-                if size != B::radix() {
-                    for k in 1..B::radix() {
-                        scratch.as_mut()[k] *= twiddles[k].splat(token);
-                    }
-                }
-
-                // Store full vectors
-                let outputs = scratch.as_ref().iter().zip(output.chunks_exact_mut(stride));
-                assert!(outputs.len() == B::radix());
-                for (s, o) in outputs {
-                    s.write(&mut o[j..]);
-                }
+                apply(
+                    &_butterfly,
+                    token,
+                    twiddles,
+                    unsafe { input.add(j) },
+                    unsafe { output.add(j) },
+                    size,
+                    stride,
+                    m,
+                    forward,
+                )
             }
         }
     }
@@ -328,22 +419,16 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
     B: Butterfly<T, width::W1, Token>,
     SizedVector<nc::Complex<T>, width::W1, Token>: Complex,
 {
-    assert_eq!(input.len(), size * stride);
-    assert_eq!(output.len(), input.len());
-
     let m = size / B::radix();
-    let steps = twiddles[..size].chunks(B::radix()).zip(
-        input
-            .windows(stride * (B::radix() - 1) * m + stride)
-            .step_by(stride)
-            .zip(output.chunks_exact_mut(stride * B::radix())),
-    );
-    assert!(steps.len() == m);
-    for (twiddles, (input, output)) in steps {
-        // Load a single value
+    let steps = ButterflyIter::new(size, stride, B::radix(), twiddles, input, output);
+    for (twiddles, mut input, mut output) in steps {
+        // Load vectors
         let mut scratch = B::make_buffer(token);
         for k in 0..B::radix() {
-            scratch.as_mut()[k] = input[stride * k * m].splat(token);
+            unsafe {
+                scratch.as_mut()[k] = input.read().splat(token);
+                input = input.add(stride * m);
+            }
         }
 
         // Butterfly with optional twiddles
@@ -354,9 +439,12 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
             }
         }
 
-        // Store a single value
+        // Store vectors
         for k in 0..B::radix() {
-            output[stride * k] = scratch.as_ref()[k][0];
+            unsafe {
+                output.write(scratch.as_ref()[k][0]);
+                output = output.add(stride);
+            }
         }
     }
 }

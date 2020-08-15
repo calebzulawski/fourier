@@ -230,6 +230,7 @@ struct ButterflyIter<'a, T> {
 }
 
 impl<'a, T> ButterflyIter<'a, T> {
+    #[inline(always)]
     fn new(
         size: usize,
         stride: usize,

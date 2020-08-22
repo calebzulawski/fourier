@@ -173,7 +173,7 @@ implement! { f64, apply_stages_f64 }
 /// functions for each radix.
 macro_rules! make_radix_fns {
     {
-        @impl $type:ty, $wide:literal, $radix:literal, $name:ident, $butterfly:ident
+        @impl $type:ident, $wide:literal, $radix:literal, $name:ident, $butterfly:ident
     } => {
 
         #[multiversion::multiversion]
@@ -311,7 +311,7 @@ make_radix_fns! {
 
 /// This macro creates the stage application function.
 macro_rules! make_stage_fns {
-    { $type:ty, $name:ident, $radix_mod:ident } => {
+    { $type:ident, $name:ident, $radix_mod:ident } => {
         #[multiversion::multiversion]
         #[clone(target = "[x86|x86_64]+avx")]
         #[inline]

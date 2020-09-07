@@ -28,5 +28,5 @@ alloc = ["generic-simd/alloc"]
 multiversion = { version = "0.6", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 num-complex = { version = "0.3", default-features = false }
-generic-simd = { version = "0.1", default-features = false, features = ["complex"], git = "https://github.com/calebzulawski/safe_simd.git" }
+generic-simd = { version = "0.1", default-features = false, features = ["complex"], git = "https://github.com/calebzulawski/generic-simd.git" }
 paste = "1"

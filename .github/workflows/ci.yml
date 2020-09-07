@@ -9,9 +9,8 @@ jobs:
     strategy:
       matrix:
         version:
-          # TODO enable when 1.46 released
-          #- 1.46.0
-          #- stable
+          - 1.46.0
+          - stable
           - beta
           - nightly
     steps:

@@ -1,11 +1,9 @@
 use crate::float::Float;
 use generic_simd::{
     arch,
-    vector::{
-        pointer::PointerWidth as _,
-        scalar::{Scalar, ScalarWidth},
-        width, Complex, SizedVector, Vector,
-    },
+    pointer::Pointer as _,
+    scalar::{Scalar, ScalarExt},
+    vector::{width, Complex, Vector, VectorOf},
 };
 use num_complex as nc;
 
@@ -14,10 +12,10 @@ where
     T: Float,
     W: width::Width,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, W>,
+    nc::Complex<T>: Scalar<Token, W>,
 {
-    type Buffer: AsRef<[SizedVector<nc::Complex<T>, W, Token>]>
-        + AsMut<[SizedVector<nc::Complex<T>, W, Token>]>;
+    type Buffer: AsRef<[VectorOf<nc::Complex<T>, W, Token>]>
+        + AsMut<[VectorOf<nc::Complex<T>, W, Token>]>;
 
     fn radix() -> usize;
 
@@ -33,10 +31,10 @@ where
     T: Float,
     W: width::Width,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, W>,
-    SizedVector<nc::Complex<T>, W, Token>: Complex,
+    nc::Complex<T>: Scalar<Token, W>,
+    VectorOf<nc::Complex<T>, W, Token>: Complex,
 {
-    type Buffer = [SizedVector<nc::Complex<T>, W, Token>; 2];
+    type Buffer = [VectorOf<nc::Complex<T>, W, Token>; 2];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -61,10 +59,10 @@ where
     T: Float,
     W: width::Width,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, W>,
-    SizedVector<nc::Complex<T>, W, Token>: Complex,
+    nc::Complex<T>: Scalar<Token, W>,
+    VectorOf<nc::Complex<T>, W, Token>: Complex,
 {
-    type Buffer = [SizedVector<nc::Complex<T>, W, Token>; 3];
+    type Buffer = [VectorOf<nc::Complex<T>, W, Token>; 3];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -96,10 +94,10 @@ where
     T: Float,
     W: width::Width,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, W>,
-    SizedVector<nc::Complex<T>, W, Token>: Complex,
+    nc::Complex<T>: Scalar<Token, W>,
+    VectorOf<nc::Complex<T>, W, Token>: Complex,
 {
-    type Buffer = [SizedVector<nc::Complex<T>, W, Token>; 4];
+    type Buffer = [VectorOf<nc::Complex<T>, W, Token>; 4];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -139,10 +137,10 @@ where
     T: Float,
     W: width::Width,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, W>,
-    SizedVector<nc::Complex<T>, W, Token>: Complex,
+    nc::Complex<T>: Scalar<Token, W>,
+    VectorOf<nc::Complex<T>, W, Token>: Complex,
 {
-    type Buffer = [SizedVector<nc::Complex<T>, W, Token>; 8];
+    type Buffer = [VectorOf<nc::Complex<T>, W, Token>; 8];
 
     #[inline(always)]
     fn radix() -> usize {
@@ -193,11 +191,11 @@ pub(crate) fn apply_butterfly<T, Token, B>(
         + Butterfly<T, width::W2, Token>
         + Butterfly<T, width::W4, Token>
         + Butterfly<T, width::W8, Token>,
-    nc::Complex<T>: Scalar<Token>,
-    SizedVector<nc::Complex<T>, width::W1, Token>: Complex,
-    SizedVector<nc::Complex<T>, width::W2, Token>: Complex,
-    SizedVector<nc::Complex<T>, width::W4, Token>: Complex,
-    SizedVector<nc::Complex<T>, width::W8, Token>: Complex,
+    nc::Complex<T>: ScalarExt<Token>,
+    VectorOf<nc::Complex<T>, width::W1, Token>: Complex,
+    VectorOf<nc::Complex<T>, width::W2, Token>: Complex,
+    VectorOf<nc::Complex<T>, width::W4, Token>: Complex,
+    VectorOf<nc::Complex<T>, width::W8, Token>: Complex,
 {
     if stride >= 8 {
         apply_butterfly_wide::<T, width::W8, Token, B>(
@@ -293,9 +291,9 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
     T: Float,
     W: width::Width,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, W>,
+    nc::Complex<T>: Scalar<Token, W>,
     B: Butterfly<T, W, Token>,
-    SizedVector<nc::Complex<T>, W, Token>: Complex,
+    VectorOf<nc::Complex<T>, W, Token>: Complex,
 {
     assert!(stride >= W::VALUE);
     let m = size / B::radix();
@@ -317,9 +315,9 @@ pub(crate) fn apply_butterfly_wide<T, W, Token, B>(
         T: Float,
         W: width::Width,
         Token: arch::Token,
-        nc::Complex<T>: ScalarWidth<Token, W>,
+        nc::Complex<T>: Scalar<Token, W>,
         B: Butterfly<T, W, Token>,
-        SizedVector<nc::Complex<T>, W, Token>: Complex,
+        VectorOf<nc::Complex<T>, W, Token>: Complex,
     {
         // Load vectors
         let mut scratch = B::make_buffer(token);
@@ -416,9 +414,9 @@ pub(crate) fn apply_butterfly_narrow<T, Token, B>(
 ) where
     T: Float,
     Token: arch::Token,
-    nc::Complex<T>: ScalarWidth<Token, width::W1>,
+    nc::Complex<T>: Scalar<Token, width::W1>,
     B: Butterfly<T, width::W1, Token>,
-    SizedVector<nc::Complex<T>, width::W1, Token>: Complex,
+    VectorOf<nc::Complex<T>, width::W1, Token>: Complex,
 {
     let m = size / B::radix();
     let steps = ButterflyIter::new(size, stride, B::radix(), twiddles, input, output);

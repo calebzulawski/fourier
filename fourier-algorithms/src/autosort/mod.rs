@@ -12,7 +12,8 @@ use core::cell::RefCell;
 use core::marker::PhantomData;
 use generic_simd::{
     arch,
-    vector::{scalar::Scalar, width, Complex, SizedVector},
+    scalar::ScalarExt,
+    vector::{width, Complex, VectorOf},
 };
 use num_complex as nc;
 use num_traits::One as _;
@@ -214,11 +215,11 @@ where
         ) -> bool,
     ) where
         Token: arch::Token,
-        nc::Complex<T>: Scalar<Token>,
-        SizedVector<nc::Complex<T>, width::W1, Token>: Complex,
-        SizedVector<nc::Complex<T>, width::W2, Token>: Complex,
-        SizedVector<nc::Complex<T>, width::W4, Token>: Complex,
-        SizedVector<nc::Complex<T>, width::W8, Token>: Complex,
+        nc::Complex<T>: ScalarExt<Token>,
+        VectorOf<nc::Complex<T>, width::W1, Token>: Complex,
+        VectorOf<nc::Complex<T>, width::W2, Token>: Complex,
+        VectorOf<nc::Complex<T>, width::W4, Token>: Complex,
+        VectorOf<nc::Complex<T>, width::W8, Token>: Complex,
     {
         assert_eq!(input.len(), self.size);
 

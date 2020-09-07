@@ -73,7 +73,10 @@ template <typename T> struct fft;
 template <> struct fft<float> {
   explicit fft(std::size_t size)
       : impl(::fourier::c::fourier_create_float(size),
-             ::fourier::c::fourier_destroy_float) {}
+             ::fourier::c::fourier_destroy_float) {
+    if (!impl)
+      throw std::runtime_error("failed to initialize FFT");
+  }
 
   fft() = delete;
   fft(const fft &) = delete;
@@ -101,7 +104,10 @@ private:
 template <> struct fft<double> {
   explicit fft(std::size_t size)
       : impl(::fourier::c::fourier_create_double(size),
-             ::fourier::c::fourier_destroy_double) {}
+             ::fourier::c::fourier_destroy_double) {
+    if (!impl)
+      throw std::runtime_error("failed to initialize FFT");
+  }
 
   fft() = delete;
   fft(const fft &) = delete;

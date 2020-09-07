@@ -5,7 +5,11 @@
 #include <iostream>
 
 template <typename C> void check(const C &input, const C &output) {
-  for (std::size_t i = 0; i < 4; ++i) {
+  if (input.size() != output.size()) {
+    std::cerr << "Size mismatch" << std::endl;
+    std::exit(-1);
+  }
+  for (std::size_t i = 0; i < input.size(); ++i) {
     if (std::abs(input[i] - output[i]) > 1e-10) {
       std::cerr << "Mismatch at index " << i << " (" << input[i] << " is not "
                 << output[i] << ")" << std::endl;
@@ -15,9 +19,9 @@ template <typename C> void check(const C &input, const C &output) {
 }
 
 template <typename T> void test() {
-  std::array<std::complex<float>, 4> input{{{1, 0}, {0, 0}, {0, 0}, {0, 0}}};
-  std::array<std::complex<float>, 4> output;
-  fourier::fft<float> fft(input.size());
+  std::array<std::complex<T>, 4> input{{{1, 0}, {0, 0}, {0, 0}, {0, 0}}};
+  std::array<std::complex<T>, 4> output;
+  fourier::fft<T> fft(input.size());
   fft.transform(input.data(), output.data(), fourier::transform::fft);
   fft.transform_in_place(output.data(), fourier::transform::ifft);
   check(input, output);

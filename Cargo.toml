@@ -6,6 +6,7 @@ members = [
     "fourier-bench",
     "fourier-ffi",
     "fourier-macros",
+    "fourier-new",
     "fourier-prof",
 ]
 

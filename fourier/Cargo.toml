@@ -1,6 +1,6 @@
 [package]
 name = "fourier"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Caleb Zulawski <caleb.zulawski@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Fast Fourier transforms (FFTs)"
@@ -25,7 +25,7 @@ std = ["fourier-algorithms/std", "fourier-macros/std"]
 alloc = []
 
 [dependencies]
-fourier-algorithms = { path = "../fourier-algorithms", version = "0.1.0", default-features = false }
+fourier-algorithms = { path = "../fourier-algorithms", version = "^0.1.1", default-features = false }
 fourier-macros = { path = "../fourier-macros", version = "0.1.0", default-features = false }
 num-complex = { version = "0.2", default-features = false }
 

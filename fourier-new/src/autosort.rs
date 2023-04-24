@@ -9,7 +9,7 @@ use core::{
 use num_complex as nc;
 use num_traits::{Float, FromPrimitive, One};
 use simd_complex::SimdComplex;
-use simd_traits::{num::Signed, Vector};
+use simd_traits::{num::Signed, swizzle::Shuffle, Vector};
 
 const NUM_RADICES: usize = 5;
 const RADICES: [usize; NUM_RADICES] = [4, 8, 4, 3, 2];
@@ -149,7 +149,7 @@ pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     stride: usize,
 ) where
     T: Scalar,
-    Simd<T, LANES>: Vector<Scalar = T> + Signed,
+    Simd<T, LANES>: Vector<Scalar = T> + Signed + Shuffle,
     LaneCount<LANES>: SupportedLaneCount,
 {
     assert!(core::mem::size_of::<Simd<T, LANES>>() == core::mem::size_of::<[T; LANES]>());
@@ -180,11 +180,12 @@ pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
             let load = unsafe { input.as_ptr().add(j + stride * i) };
             for k in 0..RADIX {
                 debug_assert!(j + stride * (i + k * m) + LANES < size);
-                scratch[k] = unsafe {
+                let packed = unsafe {
                     load.add(stride * k * m)
-                        .cast::<SimdComplex<T, LANES>>()
+                        .cast::<[Simd<T, LANES>; 2]>()
                         .read_unaligned()
                 };
+                scratch[k] = SimdComplex::from_packed(packed);
             }
 
             // Butterfly with optional twiddles
@@ -199,9 +200,9 @@ pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
             let store = unsafe { output.as_mut_ptr().add(j + RADIX * stride * i) };
             for k in 0..RADIX {
                 debug_assert!(j + stride * (i * RADIX + k) + LANES < size);
+                let packed = scratch[k].to_packed();
                 unsafe {
-                    (store.add(stride * k).cast::<SimdComplex<T, LANES>>())
-                        .write_unaligned(scratch[k])
+                    (store.add(stride * k).cast::<[Simd<T, LANES>; 2]>()).write_unaligned(packed)
                 };
             }
         };

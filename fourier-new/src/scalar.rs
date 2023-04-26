@@ -12,6 +12,7 @@ pub trait Scalar:
     + Default
     + num_traits::FromPrimitive
     + num_traits::Float
+    + num_traits::NumAssignOps
 {
 }
 

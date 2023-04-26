@@ -1,6 +1,6 @@
 mod butterfly;
 
-use crate::scalar::Scalar;
+use crate::{scalar::Scalar, Transform};
 use core::{
     cell::RefCell,
     marker::PhantomData,
@@ -141,6 +141,7 @@ macro_rules! implement {
 // implement! { f32, apply_stages_f32 }
 // implement! { f64, apply_stages_f64 }
 
+#[inline(always)]
 pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     input: &[nc::Complex<T>],
     output: &mut [nc::Complex<T>],
@@ -224,236 +225,126 @@ pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     }
 }
 
-/// This macro creates two modules, `radix_f32` and `radix_f64`, containing the radix application
-/// functions for each radix.
-macro_rules! make_radix_fns {
+pub fn stage<T>(
+    input: &mut [nc::Complex<T>],
+    output: &mut [nc::Complex<T>],
+    stages: &[usize; NUM_RADICES],
+    mut twiddles: &[nc::Complex<T>],
+    mut size: usize,
+    transform: Transform,
+) where
+    T: Scalar,
+    T::Mask: PartialEq,
+    Simd<T, 1>: Vector<Scalar = T> + Signed,
+    Simd<T, 4>: Vector<Scalar = T> + Signed,
+{
+    assert_eq!(input.len(), output.len());
+    assert_eq!(size, input.len());
+
+    const LANES: usize = 4; // FIXME use the preferred width for the target
+
+    let mut stride = 1;
+
+    fn pick_step<T, const LANES: usize>(
+        from: &mut [nc::Complex<T>],
+        to: &mut [nc::Complex<T>],
+        forward: bool,
+        radix: usize,
+        size: usize,
+        stride: usize,
+        twiddles: &[nc::Complex<T>],
+    ) where
+        T: Scalar,
+        T::Mask: PartialEq,
+        Simd<T, LANES>: Vector<Scalar = T> + Signed,
+        LaneCount<LANES>: SupportedLaneCount,
     {
-        @impl $type:ident, $wide:literal, $radix:literal, $name:ident, $butterfly:ident
-    } => {
-
-        #[multiversion::multiversion]
-        #[clone(target = "[x86|x86_64]+avx")]
-        #[inline]
-        pub fn $name(
-            input: &[num_complex::Complex<$type>],
-            output: &mut [num_complex::Complex<$type>],
-            _forward: bool,
-            size: usize,
-            stride: usize,
-            cached_twiddles: &[num_complex::Complex<$type>],
-        ) {
-            #[target_cfg(target = "[x86|x86_64]+avx")]
-            crate::avx_vector! { $type };
-
-            #[target_cfg(not(target = "[x86|x86_64]+avx"))]
-            crate::generic_vector! { $type };
-
-            #[target_cfg(target = "[x86|x86_64]+avx")]
-            {
-                if !$wide && crate::avx_optimization!($type, $radix, input, output, _forward, size, stride, cached_twiddles) {
-                    return
-                }
+        if forward {
+            match radix {
+                8 => step::<T, LANES, 8, true>(from, to, twiddles, size, stride),
+                4 => step::<T, LANES, 4, true>(from, to, twiddles, size, stride),
+                3 => step::<T, LANES, 3, true>(from, to, twiddles, size, stride),
+                2 => step::<T, LANES, 2, true>(from, to, twiddles, size, stride),
+                _ => unimplemented!("unsupported radix"),
             }
+        } else {
+            match radix {
+                8 => step::<T, LANES, 8, false>(from, to, twiddles, size, stride),
+                4 => step::<T, LANES, 4, false>(from, to, twiddles, size, stride),
+                3 => step::<T, LANES, 3, false>(from, to, twiddles, size, stride),
+                2 => step::<T, LANES, 2, false>(from, to, twiddles, size, stride),
+                _ => unimplemented!("unsupported radix"),
+            }
+        }
+    }
 
-            let m = size / $radix;
+    let mut data_in_output = false;
+    for (radix, iterations) in RADICES.iter().zip(stages) {
+        let mut iteration = 0;
 
-            let (full_count, final_offset) = if $wide {
-                (Some(((stride - 1) / width!()) * width!()), Some(stride - width!()))
+        // Use partial loads until the stride is large enough
+        while stride < LANES && iteration < *iterations {
+            let (from, to): (&mut _, &mut _) = if data_in_output {
+                (output, input)
             } else {
-                (None, None)
+                (input, output)
             };
-
-            for i in 0..m {
-                // Load twiddle factors
-                if $wide {
-                    let twiddles = {
-                        let mut twiddles = [zeroed!(); $radix];
-                        for k in 1..$radix {
-                            twiddles[k] = unsafe {
-                                broadcast!(cached_twiddles.as_ptr().add(i * $radix + k).read())
-                            };
-                        }
-                        twiddles
-                    };
-
-                    // Loop over full vectors, with a final overlapping vector
-                    for j in (0..full_count.unwrap())
-                        .step_by(width!())
-                        .chain(core::iter::once(final_offset.unwrap()))
-                    {
-                        // Load full vectors
-                        let mut scratch = [zeroed!(); $radix];
-                        let load = unsafe { input.as_ptr().add(j + stride * i) };
-                        for k in 0..$radix {
-                            scratch[k] = unsafe { load_wide!(load.add(stride * k * m)) };
-                        }
-
-                        // Butterfly with optional twiddles
-                        scratch = $butterfly!($type, scratch, _forward);
-                        if size != $radix {
-                            for k in 1..$radix {
-                                scratch[k] = mul!(scratch[k], twiddles[k]);
-                            }
-                        }
-
-                        // Store full vectors
-                        let store = unsafe { output.as_mut_ptr().add(j + $radix * stride * i) };
-                        for k in 0..$radix {
-                            unsafe { store_wide!(scratch[k], store.add(stride * k)) };
-                        }
-                    }
-                } else {
-                    let twiddles = {
-                        let mut twiddles = [zeroed!(); $radix];
-                        for k in 1..$radix {
-                            twiddles[k] = unsafe {
-                                load_narrow!(cached_twiddles.as_ptr().add(i * $radix + k))
-                            };
-                        }
-                        twiddles
-                    };
-
-                    let load = unsafe { input.as_ptr().add(stride * i) };
-                    let store = unsafe { output.as_mut_ptr().add($radix * stride * i) };
-                    for j in 0..stride {
-                        // Load a single value
-                        let mut scratch = [zeroed!(); $radix];
-                        for k in 0..$radix {
-                            scratch[k] = unsafe { load_narrow!(load.add(stride * k * m + j)) };
-                        }
-
-                        // Butterfly with optional twiddles
-                        scratch = $butterfly!($type, scratch, _forward);
-                        if size != $radix {
-                            for k in 1..$radix {
-                                scratch[k] = mul!(scratch[k], twiddles[k]);
-                            }
-                        }
-
-                        // Store a single value
-                        for k in 0..$radix {
-                            unsafe { store_narrow!(scratch[k], store.add(stride * k + j)) };
-                        }
-                    }
-                }
-            }
+            pick_step::<T, 1>(
+                from,
+                to,
+                transform.is_forward(),
+                *radix,
+                size,
+                stride,
+                twiddles,
+            );
+            size /= radix;
+            stride *= radix;
+            twiddles = &twiddles[size * radix..];
+            iteration += 1;
+            data_in_output = !data_in_output;
         }
-    };
-    {
-        $([$radix:literal, $wide_name:ident, $narrow_name:ident, $butterfly:ident]),*
-    } => {
-        mod radix_f32 {
-        $(
-            make_radix_fns! { @impl f32, true, $radix, $wide_name, $butterfly }
-            make_radix_fns! { @impl f32, false, $radix, $narrow_name, $butterfly }
-        )*
-        }
-        mod radix_f64 {
-        $(
-            make_radix_fns! { @impl f64, true, $radix, $wide_name, $butterfly }
-            make_radix_fns! { @impl f64, false, $radix, $narrow_name, $butterfly }
-        )*
-        }
-    };
-}
 
-// make_radix_fns! {
-//     [2, radix_2_wide, radix_2_narrow, butterfly2],
-//     [3, radix_3_wide, radix_3_narrow, butterfly3],
-//     [4, radix_4_wide, radix_4_narrow, butterfly4],
-//     [8, radix_8_wide, radix_8_narrow, butterfly8]
-// }
-
-/// This macro creates the stage application function.
-macro_rules! make_stage_fns {
-    { $type:ident, $name:ident, $radix_mod:ident } => {
-        #[multiversion::multiversion]
-        #[clone(target = "[x86|x86_64]+avx")]
-        #[inline]
-        fn $name(
-            input: &mut [Complex<$type>],
-            output: &mut [Complex<$type>],
-            stages: &[usize; NUM_RADICES],
-            mut twiddles: &[Complex<$type>],
-            mut size: usize,
-            transform: Transform,
-        ) {
-            #[target_cfg(target = "[x86|x86_64]+avx")]
-            crate::avx_vector! { $type };
-
-            #[target_cfg(not(target = "[x86|x86_64]+avx"))]
-            crate::generic_vector! { $type };
-
-            assert_eq!(input.len(), output.len());
-            assert_eq!(size, input.len());
-
-            let mut stride = 1;
-
-            let mut data_in_output = false;
-            for (radix, iterations) in RADICES.iter().zip(stages) {
-                let mut iteration = 0;
-
-                // Use partial loads until the stride is large enough
-                while stride < width! {} && iteration < *iterations {
-                    let (from, to): (&mut _, &mut _) = if data_in_output {
-                        (output, input)
-                    } else {
-                        (input, output)
-                    };
-                    match radix {
-                        8 => dispatch!($radix_mod::radix_8_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
-                        4 => dispatch!($radix_mod::radix_4_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
-                        3 => dispatch!($radix_mod::radix_3_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
-                        2 => dispatch!($radix_mod::radix_2_narrow(from, to, transform.is_forward(), size, stride, twiddles)),
-                        _ => unimplemented!("unsupported radix"),
-                    }
-                    size /= radix;
-                    stride *= radix;
-                    twiddles = &twiddles[size * radix..];
-                    iteration += 1;
-                    data_in_output = !data_in_output;
-                }
-
-                for _ in iteration..*iterations {
-                    let (from, to): (&mut _, &mut _) = if data_in_output {
-                        (output, input)
-                    } else {
-                        (input, output)
-                    };
-                    match radix {
-                        8 => dispatch!($radix_mod::radix_8_wide(from, to, transform.is_forward(), size, stride, twiddles)),
-                        4 => dispatch!($radix_mod::radix_4_wide(from, to, transform.is_forward(), size, stride, twiddles)),
-                        3 => dispatch!($radix_mod::radix_3_wide(from, to, transform.is_forward(), size, stride, twiddles)),
-                        2 => dispatch!($radix_mod::radix_2_wide(from, to, transform.is_forward(), size, stride, twiddles)),
-                        _ => unimplemented!("unsupported radix"),
-                    }
-                    size /= radix;
-                    stride *= radix;
-                    twiddles = &twiddles[size * radix ..];
-                    data_in_output = !data_in_output;
-                }
-            }
-            if let Some(scale) = match transform {
-                Transform::Fft | Transform::UnscaledIfft => None,
-                Transform::Ifft => Some(1. / (input.len() as $type)),
-                Transform::SqrtScaledFft | Transform::SqrtScaledIfft => Some(1. / (input.len() as $type).sqrt()),
-            } {
-                if data_in_output {
-                    for (x, y) in output.iter().zip(input.iter_mut()) {
-                        *y = x * scale;
-                    }
-                } else {
-                    for x in input.iter_mut() {
-                        *x *= scale;
-                    }
-                }
+        for _ in iteration..*iterations {
+            let (from, to): (&mut _, &mut _) = if data_in_output {
+                (output, input)
             } else {
-                if data_in_output {
-                    input.copy_from_slice(output);
-                }
+                (input, output)
+            };
+            pick_step::<T, LANES>(
+                from,
+                to,
+                transform.is_forward(),
+                *radix,
+                size,
+                stride,
+                twiddles,
+            );
+            size /= radix;
+            stride *= radix;
+            twiddles = &twiddles[size * radix..];
+            data_in_output = !data_in_output;
+        }
+    }
+    if let Some(scale) = match transform {
+        Transform::Fft | Transform::UnscaledIfft => None,
+        Transform::Ifft => Some(T::one() / T::from_usize(input.len()).unwrap()),
+        Transform::SqrtScaledFft | Transform::SqrtScaledIfft => {
+            Some(T::one() / T::from_usize(input.len()).unwrap().sqrt())
+        }
+    } {
+        if data_in_output {
+            for (x, y) in output.iter().zip(input.iter_mut()) {
+                *y = x * scale;
+            }
+        } else {
+            for x in input.iter_mut() {
+                *x *= scale;
             }
         }
-    };
+    } else {
+        if data_in_output {
+            input.copy_from_slice(output);
+        }
+    }
 }
-// make_stage_fns! { f32, apply_stages_f32, radix_f32 }
-// make_stage_fns! { f64, apply_stages_f64, radix_f64 }

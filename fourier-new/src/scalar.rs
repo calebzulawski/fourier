@@ -1,18 +1,7 @@
-use core::{
-    ops::{Add, Mul, Neg, Sub},
-    simd::{LaneCount, Simd, SimdElement, SupportedLaneCount},
-};
+use core::simd::SimdElement;
 
 pub trait Scalar:
-    SimdElement
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + Neg<Output = Self>
-    + Default
-    + num_traits::FromPrimitive
-    + num_traits::Float
-    + num_traits::NumAssignOps
+    SimdElement + Default + num_traits::FromPrimitive + num_traits::Float + num_traits::NumAssignOps
 {
 }
 

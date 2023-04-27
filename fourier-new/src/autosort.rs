@@ -1,9 +1,8 @@
 mod butterfly;
 
-use crate::{scalar::Scalar, Transform};
+use crate::{scalar::Scalar, Fft, Transform};
 use core::{
     cell::RefCell,
-    marker::PhantomData,
     simd::{LaneCount, Simd, SupportedLaneCount},
 };
 use num_complex as nc;
@@ -36,7 +35,6 @@ fn initialize_twiddles<T: Scalar>(
     counts: [usize; NUM_RADICES],
 ) -> (Vec<nc::Complex<T>>, Vec<nc::Complex<T>>) {
     let (mut forward_twiddles, mut inverse_twiddles) = (Vec::new(), Vec::new());
-    let mut stride = 1;
     for (radix, count) in RADICES.iter().zip(&counts) {
         for _ in 0..*count {
             let m = size / radix;
@@ -49,14 +47,13 @@ fn initialize_twiddles<T: Scalar>(
                 }
             }
             size /= radix;
-            stride *= radix;
         }
     }
     (forward_twiddles, inverse_twiddles)
 }
 
 /// Implements a mixed-radix Stockham autosort algorithm for multiples of 2 and 3.
-pub(crate) struct Autosort<T> {
+pub struct Autosort<T> {
     size: usize,
     counts: [usize; NUM_RADICES],
     forward_twiddles: Vec<nc::Complex<T>>,
@@ -65,16 +62,6 @@ pub(crate) struct Autosort<T> {
 }
 
 impl<T: Scalar> Autosort<T> {
-    /// Return the radix counts.
-    pub fn counts(&self) -> [usize; NUM_RADICES] {
-        self.counts
-    }
-
-    /// Return the work buffer size.
-    pub fn work_size(&self) -> usize {
-        self.work.borrow().len()
-    }
-
     /// Create a new Stockham autosort generator.  Returns `None` if the transform size cannot be
     /// performed.
     pub fn new(size: usize) -> Option<Self> {
@@ -106,43 +93,32 @@ impl<T: Scalar> Autosort<T> {
     }
 }
 
-macro_rules! implement {
-    {
-        $type:ty, $apply:ident
-    } => {
-        impl<Twiddles: AsRef<[Complex<$type>]>, Work: AsMut<[Complex<$type>]>> Fft
-            for Autosort<$type, Twiddles, Work>
-        {
-            type Real = $type;
+impl<T> Fft for Autosort<T>
+where
+    T: Scalar,
+    T::Mask: PartialEq,
+    Simd<T, 1>: Vector<Scalar = T> + Signed,
+    Simd<T, 4>: Vector<Scalar = T> + Signed,
+{
+    type Real = T;
 
-            fn size(&self) -> usize {
-                self.size
-            }
+    fn size(&self) -> usize {
+        self.size
+    }
 
-            fn transform_in_place(&self, input: &mut [Complex<$type>], transform: Transform) {
-                let mut work = self.work.borrow_mut();
-                let twiddles = if transform.is_forward() {
-                    &self.forward_twiddles
-                } else {
-                    &self.inverse_twiddles
-                };
-                $apply(
-                    input,
-                    work.as_mut(),
-                    &self.counts,
-                    twiddles.as_ref(),
-                    self.size,
-                    transform,
-                );
-            }
-        }
+    fn transform_in_place(&self, input: &mut [nc::Complex<T>], transform: Transform) {
+        let mut work = self.work.borrow_mut();
+        apply_steps(&self, input, work.as_mut(), transform);
     }
 }
-// implement! { f32, apply_stages_f32 }
-// implement! { f64, apply_stages_f64 }
 
+/// Call one step of the FFT with the given size and stride.
+///
+/// # Safety
+/// The input and output lengths must match the size * stride.
+/// The twiddles must match the size.
 #[inline(always)]
-pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
+unsafe fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     input: &[nc::Complex<T>],
     output: &mut [nc::Complex<T>],
     twiddles: &[nc::Complex<T>],
@@ -154,6 +130,9 @@ pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     LaneCount<LANES>: SupportedLaneCount,
 {
     assert!(core::mem::size_of::<Simd<T, LANES>>() == core::mem::size_of::<[T; LANES]>());
+    debug_assert!(input.len() == size * stride);
+    debug_assert!(output.len() == size * stride);
+    debug_assert!(twiddles.len() >= size);
     // TODO AVX optimization
 
     let m = size / RADIX;
@@ -225,12 +204,10 @@ pub fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     }
 }
 
-pub fn stage<T>(
+fn apply_steps<T>(
+    autosort: &Autosort<T>,
     input: &mut [nc::Complex<T>],
     output: &mut [nc::Complex<T>],
-    stages: &[usize; NUM_RADICES],
-    mut twiddles: &[nc::Complex<T>],
-    mut size: usize,
     transform: Transform,
 ) where
     T: Scalar,
@@ -238,8 +215,14 @@ pub fn stage<T>(
     Simd<T, 1>: Vector<Scalar = T> + Signed,
     Simd<T, 4>: Vector<Scalar = T> + Signed,
 {
-    assert_eq!(input.len(), output.len());
-    assert_eq!(size, input.len());
+    assert_eq!(input.len(), autosort.size);
+    assert_eq!(output.len(), autosort.size);
+
+    let mut twiddles = if transform.is_forward() {
+        autosort.forward_twiddles.as_ref()
+    } else {
+        autosort.inverse_twiddles.as_ref()
+    };
 
     const LANES: usize = 4; // FIXME use the preferred width for the target
 
@@ -259,31 +242,34 @@ pub fn stage<T>(
         Simd<T, LANES>: Vector<Scalar = T> + Signed,
         LaneCount<LANES>: SupportedLaneCount,
     {
-        if forward {
-            match radix {
-                8 => step::<T, LANES, 8, true>(from, to, twiddles, size, stride),
-                4 => step::<T, LANES, 4, true>(from, to, twiddles, size, stride),
-                3 => step::<T, LANES, 3, true>(from, to, twiddles, size, stride),
-                2 => step::<T, LANES, 2, true>(from, to, twiddles, size, stride),
-                _ => unimplemented!("unsupported radix"),
-            }
-        } else {
-            match radix {
-                8 => step::<T, LANES, 8, false>(from, to, twiddles, size, stride),
-                4 => step::<T, LANES, 4, false>(from, to, twiddles, size, stride),
-                3 => step::<T, LANES, 3, false>(from, to, twiddles, size, stride),
-                2 => step::<T, LANES, 2, false>(from, to, twiddles, size, stride),
-                _ => unimplemented!("unsupported radix"),
+        unsafe {
+            if forward {
+                match radix {
+                    8 => step::<T, LANES, 8, true>(from, to, twiddles, size, stride),
+                    4 => step::<T, LANES, 4, true>(from, to, twiddles, size, stride),
+                    3 => step::<T, LANES, 3, true>(from, to, twiddles, size, stride),
+                    2 => step::<T, LANES, 2, true>(from, to, twiddles, size, stride),
+                    _ => unimplemented!("unsupported radix"),
+                }
+            } else {
+                match radix {
+                    8 => step::<T, LANES, 8, false>(from, to, twiddles, size, stride),
+                    4 => step::<T, LANES, 4, false>(from, to, twiddles, size, stride),
+                    3 => step::<T, LANES, 3, false>(from, to, twiddles, size, stride),
+                    2 => step::<T, LANES, 2, false>(from, to, twiddles, size, stride),
+                    _ => unimplemented!("unsupported radix"),
+                }
             }
         }
     }
 
     let mut data_in_output = false;
-    for (radix, iterations) in RADICES.iter().zip(stages) {
+    let mut size = autosort.size;
+    for (radix, iterations) in RADICES.iter().zip(autosort.counts) {
         let mut iteration = 0;
 
         // Use partial loads until the stride is large enough
-        while stride < LANES && iteration < *iterations {
+        while stride < LANES && iteration < iterations {
             let (from, to): (&mut _, &mut _) = if data_in_output {
                 (output, input)
             } else {
@@ -296,7 +282,7 @@ pub fn stage<T>(
                 *radix,
                 size,
                 stride,
-                twiddles,
+                &twiddles,
             );
             size /= radix;
             stride *= radix;
@@ -305,7 +291,7 @@ pub fn stage<T>(
             data_in_output = !data_in_output;
         }
 
-        for _ in iteration..*iterations {
+        for _ in iteration..iterations {
             let (from, to): (&mut _, &mut _) = if data_in_output {
                 (output, input)
             } else {
@@ -318,7 +304,7 @@ pub fn stage<T>(
                 *radix,
                 size,
                 stride,
-                twiddles,
+                &twiddles,
             );
             size /= radix;
             stride *= radix;

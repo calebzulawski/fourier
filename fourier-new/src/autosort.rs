@@ -133,6 +133,8 @@ unsafe fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
     debug_assert!(input.len() == size * stride);
     debug_assert!(output.len() == size * stride);
     debug_assert!(twiddles.len() >= size);
+    debug_assert!(stride >= LANES);
+
     // TODO AVX optimization
 
     let m = size / RADIX;
@@ -226,8 +228,6 @@ fn apply_steps<T>(
 
     const LANES: usize = 4; // FIXME use the preferred width for the target
 
-    let mut stride = 1;
-
     fn pick_step<T, const LANES: usize>(
         from: &mut [nc::Complex<T>],
         to: &mut [nc::Complex<T>],
@@ -263,8 +263,9 @@ fn apply_steps<T>(
         }
     }
 
-    let mut data_in_output = false;
     let mut size = autosort.size;
+    let mut stride = 1;
+    let mut data_in_output = false;
     for (radix, iterations) in RADICES.iter().zip(autosort.counts) {
         let mut iteration = 0;
 

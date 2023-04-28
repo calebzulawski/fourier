@@ -161,7 +161,7 @@ unsafe fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
             let mut scratch = [SimdComplex::<T, LANES>::default(); RADIX];
             let load = unsafe { input.as_ptr().add(j + stride * i) };
             for k in 0..RADIX {
-                debug_assert!(j + stride * (i + k * m) + LANES < size);
+                debug_assert!(j + stride * (i + k * m) + LANES <= input.len());
                 let packed = unsafe {
                     load.add(stride * k * m)
                         .cast::<[Simd<T, LANES>; 2]>()
@@ -181,7 +181,7 @@ unsafe fn step<T, const LANES: usize, const RADIX: usize, const FORWARD: bool>(
             // Store full vectors
             let store = unsafe { output.as_mut_ptr().add(j + RADIX * stride * i) };
             for k in 0..RADIX {
-                debug_assert!(j + stride * (i * RADIX + k) + LANES < size);
+                debug_assert!(j + stride * (i * RADIX + k) + LANES <= output.len());
                 let packed = scratch[k].to_packed();
                 unsafe {
                     (store.add(stride * k).cast::<[Simd<T, LANES>; 2]>()).write_unaligned(packed)

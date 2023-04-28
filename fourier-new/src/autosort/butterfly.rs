@@ -13,6 +13,20 @@ where
     let butterfly2 = butterfly::<T, V, 2, FORWARD>;
     let butterfly4 = butterfly::<T, V, 4, FORWARD>;
 
+    let rotate = |v: Complex<V>, positive| {
+        if positive {
+            Complex {
+                re: -v.im,
+                im: v.re,
+            }
+        } else {
+            Complex {
+                re: v.im,
+                im: -v.re,
+            }
+        }
+    };
+
     match N {
         2 => [input[0] + input[1], input[0] - input[1]]
             .as_ref()
@@ -34,7 +48,7 @@ where
             let a = {
                 let a0 = butterfly2([input[0], input[2]]);
                 let a1 = butterfly2([input[1], input[3]]);
-                [a0[0], a0[1], a1[0], a1[1]]
+                [a0[0], a0[1], a1[0], rotate(a1[1], FORWARD)]
             };
             let b = {
                 let b0 = butterfly2([a[0], a[2]]);
@@ -44,20 +58,6 @@ where
             [b[0], b[3], b[1], b[2]].as_ref().try_into().unwrap()
         }
         8 => {
-            let rotate = |v: Complex<V>, positive| {
-                if positive {
-                    Complex {
-                        re: -v.im,
-                        im: v.re,
-                    }
-                } else {
-                    Complex {
-                        re: v.im,
-                        im: -v.re,
-                    }
-                }
-            };
-
             let twiddle = Complex::<V>::splat(super::compute_twiddle::<T, FORWARD>(1, 8));
             let twiddle_neg = Complex {
                 re: -twiddle.re,
